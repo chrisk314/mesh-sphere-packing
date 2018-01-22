@@ -1,71 +1,10 @@
-from __future__ import print_function
-
-import sys
-import os
-from pprint import pprint
-
-from meshpy import triangle, tet
-import numpy as np
-from numpy import linalg as npl
+from mesh_sphere_packing import *
 
 WITH_PBC = True
 
 # TODO : change nomenclature. Segment is used in geometry to refer to an
 #      : edge connecting two points. Here segment is used to refer to part
 #      : of a sphere surface. This is confusing...
-
-
-def output_mesh_poly(points, facets, markers, holes):
-    with open('mesh.poly', 'w') as f:
-        f.write('%d 3 0 1\n' % len(points))
-        for i, p in enumerate(points):
-            f.write('%5d %+1.15e %+1.15e %+1.15e\n' % (i, p[0], p[1], p[2]))
-        f.write('%d 1\n' % len(facets))
-        for i, (fac, m) in enumerate(zip(facets, markers)):
-            f.write('1 0 %d\n%d %d %d %d\n' % (m, 3, fac[0], fac[1], fac[2]))
-        if len(holes):
-            f.write('%d\n' % len(holes))
-            for i, h in enumerate(holes):
-                f.write('%5d %+1.15e %+1.15e %+1.15e\n' % (i, h[0], h[1], h[2]))
-        else:
-            f.write('0\n')
-
-
-def read_geomview(fname):
-    with open(fname, 'r') as f:
-        f.readline()
-        counts = [int(tok) for tok in f.readline().strip().split()]
-        points = np.array([
-            [float(tok) for tok in f.readline().strip().split()]
-            for i in range(counts[0])
-        ])
-        tris = np.array([
-            [int(tok) for tok in f.readline().strip().split()[1:]]
-            for i in range(counts[1])
-        ])
-    return points, tris
-
-
-def load_segments_geomview(prefix):
-    geomfiles = [
-        fname for fname in os.listdir(os.getcwd())
-        if fname.startswith(prefix) and os.path.splitext(fname)[1] == '.off'
-    ]
-    geomfiles.sort(key=lambda x: int(os.path.splitext(x)[0].split('_')[1]))
-    return [read_geomview(fname) for fname in geomfiles]
-
-
-def get_args(argv):
-    """Get command line arguments
-    :return: sphere center coordinates, x, y, z, sphere radius, r,
-    domain box side lengths, Lx, Ly, Lz.
-    """
-    try:
-        return float(argv[1]), float(argv[2]), float(argv[3]), argv[4]
-    except IndexError:
-        raise UserWarning('Must specify Lx Ly Lz segment_file_prefix')
-    except ValueError:
-        raise UserWarning('Invalid arguments')
 
 
 def build_boundary_PSLGs(segments, Lx, Ly, Lz):
@@ -277,90 +216,28 @@ def triangulate_PSLGs(pslgs):
     return triangulated_boundaries
 
 
-def build_tet_mesh(segments, boundaries, Lx, Ly, Lz):
-
-    def duplicate_lower_boundaries(lower_boundaries, Lx, Ly, Lz):
-        L = np.array([Lx, Ly, Lz])
-        upper_boundaries = []
-        for i, (points, tris, holes) in enumerate(lower_boundaries):
-            translate = np.array([[L[j] if j==i else 0. for j in range(3)]])
-            points_upper = points.copy() + translate
-            tris_upper = tris.copy()
-            holes_upper = holes.copy() + translate
-            upper_boundaries.append((points_upper, tris_upper, holes_upper))
-        return lower_boundaries + upper_boundaries
-
-    def build_point_list(segments, boundaries):
-        vcount = 0
-        all_points = []
-        for points, tris in segments:
-            all_points.append(points)
-            tris += vcount
-            vcount += points.shape[0]
-        for points, tris, _ in boundaries:
-            all_points.append(points)
-            tris += vcount
-            vcount += points.shape[0]
-        return np.vstack(all_points)
-
-    def build_facet_list(segments, boundaries):
-        all_facets = [tris for _, tris, _ in boundaries]
-        all_markers = [
-            np.full(len(all_facets[0]), 1), np.full(len(all_facets[3]), 2),
-            np.full(len(all_facets[1]), 3), np.full(len(all_facets[4]), 4),
-            np.full(len(all_facets[2]), 5), np.full(len(all_facets[5]), 6),
-        ]
-        fcount = 7
-        for _, tris in segments:
-            all_facets.append(tris)
-            all_markers.append(np.full(len(tris), fcount))
-            fcount += 1
-        return np.vstack(all_facets), np.hstack(all_markers)
-
-    def build_hole_list(segments):
-        # TODO : Ultimately each sphere segment will contain hole data
-        all_holes = []
-        for points, _ in segments:
-            all_holes.append(0.5 * (points.max(axis=0) + points.min(axis=0)))
-        return np.vstack(all_holes)
-
-    boundaries = duplicate_lower_boundaries(boundaries, Lx, Ly, Lz)
-
-    points = build_point_list(segments, boundaries)
-    # Fix boundary points to exactly zero
-    for i in range(3):
-        points[(np.isclose(points[:,i], 0.), i)] = 0.
-
-    facets, markers = build_facet_list(segments, boundaries)
-    holes = build_hole_list(segments)
-
-    output_mesh_poly(points, facets, markers, holes)
-
-    rad_edge = 1.4
-    min_angle = 18.
-    max_volume = None  # 0.00001
-    # TODO : Don't mix and match between setting options with argument string
-    #      : and option class attributes. Pick one and be consistent.
-    options = tet.Options('pq{}/{}Y'.format(rad_edge, min_angle))
-    options.docheck = 1
-    options.verbose = 1
-
-    mesh = tet.MeshInfo()
-    mesh.set_points(points)
-    mesh.set_facets(facets.tolist(), markers=markers.tolist())
-    mesh.set_holes(holes)
-
-    return tet.build(mesh, options=options, max_volume=max_volume)
-
-
-def main():
-    Lx, Ly, Lz, prefix = get_args(sys.argv)
-    segments = load_segments_geomview(prefix)
+def boundarypslg(segments, Lx, Ly, Lz):
     boundary_pslgs = build_boundary_PSLGs(segments, Lx, Ly, Lz)
-    boundaries = triangulate_PSLGs(boundary_pslgs)
-    mesh = build_tet_mesh(segments, boundaries, Lx, Ly, Lz)
-    mesh.write_vtk('mesh')
+    return triangulate_PSLGs(boundary_pslgs)
+
+
+def get_args(argv):
+    """Get command line arguments
+    :return: sphere center coordinates, x, y, z, sphere radius, r,
+    domain box side lengths, Lx, Ly, Lz.
+    """
+    try:
+        return float(argv[1]), float(argv[2]), float(argv[3]), argv[4]
+    except IndexError:
+        raise UserWarning('Must specify Lx Ly Lz segment_file_prefix')
+    except ValueError:
+        raise UserWarning('Invalid arguments')
 
 
 if __name__ == '__main__':
-    main()
+    import sys, devutils
+
+    Lx, Ly, Lz, prefix = get_args(sys.argv)
+    segments = load_geomview_files(prefix)
+    boundaries = boundarypslg(segments, Lx, Ly, Lz)
+    devutils.write_boundaries_geomview(boundaries)
