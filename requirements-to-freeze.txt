@@ -1,3 +1,4 @@
 meshpy
 numpy
 scipy
+pyvtk
