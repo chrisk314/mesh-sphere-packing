@@ -138,23 +138,17 @@ int reportnorms;
 /*                                                                           */
 /*****************************************************************************/
 
-int wrap_tri()
+int wrap_tri(double* points, int numberofpoints)
 {
   struct triangulateio in, mid, out, vorout;
 
   /* Define input points. */
 
-  in.numberofpoints = 4;
+  in.numberofpoints = numberofpoints;
   in.numberofpointattributes = 1;
   in.pointlist = (REAL *) malloc(in.numberofpoints * 2 * sizeof(REAL));
-  in.pointlist[0] = 0.0;
-  in.pointlist[1] = 0.0;
-  in.pointlist[2] = 1.0;
-  in.pointlist[3] = 0.0;
-  in.pointlist[4] = 1.0;
-  in.pointlist[5] = 10.0;
-  in.pointlist[6] = 0.0;
-  in.pointlist[7] = 10.0;
+  for (int i=0; i<2*numberofpoints; i++)
+    in.pointlist[i] = points[i];
   in.pointattributelist = (REAL *) malloc(in.numberofpoints *
                                           in.numberofpointattributes *
                                           sizeof(REAL));
