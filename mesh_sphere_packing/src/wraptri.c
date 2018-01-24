@@ -138,29 +138,28 @@ int reportnorms;
 /*                                                                           */
 /*****************************************************************************/
 
-int wrap_tri(double* points, int numberofpoints)
+int wrap_tri(char* options, double* points, double* pointattributes,\
+    int numberofpoints, int numberofpointattributes, int* pointmarkerlist)
 {
   struct triangulateio in, mid, out, vorout;
 
   /* Define input points. */
 
   in.numberofpoints = numberofpoints;
-  in.numberofpointattributes = 1;
   in.pointlist = (REAL *) malloc(in.numberofpoints * 2 * sizeof(REAL));
-  for (int i=0; i<2*numberofpoints; i++)
+  for (int i=0; i<2*in.numberofpoints; i++)
     in.pointlist[i] = points[i];
+
+  in.numberofpointattributes = numberofpointattributes;
   in.pointattributelist = (REAL *) malloc(in.numberofpoints *
                                           in.numberofpointattributes *
                                           sizeof(REAL));
-  in.pointattributelist[0] = 0.0;
-  in.pointattributelist[1] = 1.0;
-  in.pointattributelist[2] = 11.0;
-  in.pointattributelist[3] = 10.0;
+  for (int i=0; i<in.numberofpoints*in.numberofpointattributes; i++)
+    in.pointattributelist[i] = pointattributes[i];
+
   in.pointmarkerlist = (int *) malloc(in.numberofpoints * sizeof(int));
-  in.pointmarkerlist[0] = 0;
-  in.pointmarkerlist[1] = 2;
-  in.pointmarkerlist[2] = 0;
-  in.pointmarkerlist[3] = 0;
+  for (int i=0; i<numberofpoints; i++)
+    in.pointmarkerlist[i] = pointmarkerlist[i];
 
   in.numberofsegments = 0;
   in.numberofholes = 0;
@@ -204,7 +203,7 @@ int wrap_tri(double* points, int numberofpoints)
   /*   produce an edge list (e), a Voronoi diagram (v), and a triangle */
   /*   neighbor list (n).                                              */
 
-  triangulate("pczAevn", &in, &mid, &vorout);
+  triangulate(options, &in, &mid, &vorout);
 
   printf("Initial triangulation:\n\n");
   report(&mid, 1, 1, 1, 1, 1, 0);
