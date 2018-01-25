@@ -242,7 +242,10 @@ def smooth_segments(segments):
 
 
 def splitsphere(args):
-    x, y, z, r, Lx, Ly, Lz = args
+    x, y, z = args.particle_center
+    r = args.particle_radius
+    Lx, Ly, Lz = args.domain_dimensions
+
     points = gen_sphere_spiral_points(x, y, z, r)
     points = filter_points(points, r)
     segment_point_sets = split_sphere_points_segments(
@@ -251,24 +254,3 @@ def splitsphere(args):
     segments = triangulate_segment_points(segment_point_sets, x, y, z)
     segments = smooth_segments(segments)
     return translate_segments(segments, Lx, Ly, Lz)
-
-
-def get_args(argv):
-    """Get command line arguments
-    :return: sphere center coordinates, x, y, z, sphere radius, r,
-    domain box side lengths, Lx, Ly, Lz.
-    """
-    try:
-        return float(argv[1]), float(argv[2]), float(argv[3]), float(argv[4]),\
-                float(argv[5]), float(argv[6]), float(argv[7])
-    except IndexError:
-        raise UserWarning('Must specify x0 y0 z0 r Lx Ly Lz')
-    except ValueError:
-        raise UserWarning('Invalid arguments')
-
-
-if __name__ == '__main__':
-    import sys
-
-    segments = splitsphere(get_args(sys.argv))
-    output_segments_geomview(segments)

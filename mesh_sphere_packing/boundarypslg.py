@@ -220,28 +220,7 @@ def triangulate_PSLGs(pslgs):
     return triangulated_boundaries
 
 
-def boundarypslg(segments, Lx, Ly, Lz):
+def boundarypslg(segments, args):
+    Lx, Ly, Lz = args.domain_dimensions
     boundary_pslgs = build_boundary_PSLGs(segments, Lx, Ly, Lz)
     return triangulate_PSLGs(boundary_pslgs)
-
-
-def get_args(argv):
-    """Get command line arguments
-    :return: sphere center coordinates, x, y, z, sphere radius, r,
-    domain box side lengths, Lx, Ly, Lz.
-    """
-    try:
-        return float(argv[1]), float(argv[2]), float(argv[3]), argv[4]
-    except IndexError:
-        raise UserWarning('Must specify Lx Ly Lz segment_file_prefix')
-    except ValueError:
-        raise UserWarning('Invalid arguments')
-
-
-if __name__ == '__main__':
-    import sys, devutils
-
-    Lx, Ly, Lz, prefix = get_args(sys.argv)
-    segments = load_geomview_files(prefix)
-    boundaries = boundarypslg(segments, Lx, Ly, Lz)
-    devutils.write_boundaries_geomview(boundaries)

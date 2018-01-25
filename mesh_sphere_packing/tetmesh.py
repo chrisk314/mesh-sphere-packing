@@ -4,7 +4,7 @@ from numpy import linalg as npl
 from meshpy import tet
 
 
-def build_tetmesh(segments, boundaries, Lx, Ly, Lz):
+def build_tetmesh(segments, boundaries, args):
 
     def duplicate_lower_boundaries(lower_boundaries, Lx, Ly, Lz):
         L = np.array([Lx, Ly, Lz])
@@ -51,6 +51,8 @@ def build_tetmesh(segments, boundaries, Lx, Ly, Lz):
             all_holes.append(0.5 * (points.max(axis=0) + points.min(axis=0)))
         return np.vstack(all_holes)
 
+    Lx, Ly, Lz = args.domain_dimensions
+
     boundaries = duplicate_lower_boundaries(boundaries, Lx, Ly, Lz)
 
     points = build_point_list(segments, boundaries)
@@ -76,26 +78,3 @@ def build_tetmesh(segments, boundaries, Lx, Ly, Lz):
     mesh.set_holes(holes)
 
     return tet.build(mesh, options=options, max_volume=max_volume)
-
-
-def get_args(argv):
-    """Get command line arguments
-    :return: sphere center coordinates, x, y, z, sphere radius, r,
-    domain box side lengths, Lx, Ly, Lz.
-    """
-    try:
-        return float(argv[1]), float(argv[2]), float(argv[3]), argv[4], argv[5]
-    except IndexError:
-        raise UserWarning('Must specify Lx Ly Lz segment_file_prefix')
-    except ValueError:
-        raise UserWarning('Invalid arguments')
-
-
-if __name__ == '__main__':
-    import sys, devutils
-
-    Lx, Ly, Lz, segment_prefix, boundary_prefix = get_args(sys.argv)
-    segments = devutils.load_geomview_files(segment_prefix)
-    boundaries = devutils.load_geomview_files(boundaries_prefix)
-    mesh = build_tetmesh(segments, boundaries, Lx, Ly, Lz)
-    mesh.write_vtk('mesh')
