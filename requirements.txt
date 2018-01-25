@@ -1,0 +1,12 @@
+appdirs==1.4.3
+attrs==17.4.0
+decorator==4.2.1
+MeshPy==2016.1.2
+numpy==1.14.0
+pluggy==0.6.0
+py==1.5.2
+pytest==3.3.2
+pytools==2017.6
+PyVTK==0.5.18
+scipy==1.0.0
+six==1.11.0
