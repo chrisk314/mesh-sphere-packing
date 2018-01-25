@@ -139,7 +139,8 @@ int reportnorms;
 /*****************************************************************************/
 
 int wrap_tri(char* options, double* points, double* pointattributes,\
-    int numberofpoints, int numberofpointattributes, int* pointmarkerlist)
+    int numberofpoints, int numberofpointattributes, int* pointmarkerlist,\
+    double* regionlist, int numberofregions)
 {
   struct triangulateio in, mid, out, vorout;
 
@@ -163,12 +164,10 @@ int wrap_tri(char* options, double* points, double* pointattributes,\
 
   in.numberofsegments = 0;
   in.numberofholes = 0;
-  in.numberofregions = 1;
+  in.numberofregions = numberofregions;
   in.regionlist = (REAL *) malloc(in.numberofregions * 4 * sizeof(REAL));
-  in.regionlist[0] = 0.5;
-  in.regionlist[1] = 5.0;
-  in.regionlist[2] = 7.0;            /* Regional attribute (for whole mesh). */
-  in.regionlist[3] = 0.1;          /* Area constraint that will not be used. */
+  for (int i=0; i<4*numberofregions; i++)
+    in.regionlist[i] = regionlist[i];
 
   printf("Input point set:\n\n");
   report(&in, 1, 0, 0, 0, 0, 0);
