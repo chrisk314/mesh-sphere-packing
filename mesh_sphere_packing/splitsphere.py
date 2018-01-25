@@ -1,9 +1,8 @@
 
-from mesh_sphere_packing import *
-# import numpy as np
-# from numpy import linalg as npl
-# from numpy import random as npr
-# from scipy.spatial.qhull import ConvexHull
+import numpy as np
+from numpy import linalg as npl
+from numpy import random as npr
+from scipy.spatial.qhull import ConvexHull
 
 
 def gen_sphere_spiral_points(x, y, z, r, num_points=200):

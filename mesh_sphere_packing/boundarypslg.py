@@ -1,9 +1,7 @@
 
-from mesh_sphere_packing import *
-
-# from meshpy import triangle
-# import numpy as np
-# from numpy import linalg as npl
+import numpy as np
+from numpy import linalg as npl
+from meshpy import triangle
 
 WITH_PBC = True
 

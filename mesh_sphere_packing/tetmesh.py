@@ -1,8 +1,7 @@
 
-from mesh_sphere_packing import *
-# from meshpy import tet
-# import numpy as np
-# from numpy import linalg as npl
+import numpy as np
+from numpy import linalg as npl
+from meshpy import tet
 
 
 def build_tetmesh(segments, boundaries, Lx, Ly, Lz):

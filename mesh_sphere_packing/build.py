@@ -1,10 +1,6 @@
 
-import faulthandler
-faulthandler.enable()
-
 import sys
 
-from mesh_sphere_packing import *
 from mesh_sphere_packing.splitsphere import splitsphere
 from mesh_sphere_packing.boundarypslg import boundarypslg
 from mesh_sphere_packing.tetmesh import build_tetmesh
