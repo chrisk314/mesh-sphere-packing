@@ -1,5 +1,6 @@
 
 from mesh_sphere_packing import *
+
 # from meshpy import triangle
 # import numpy as np
 # from numpy import linalg as npl
@@ -82,7 +83,7 @@ def build_boundary_PSLGs(segments, Lx, Ly, Lz):
         perim_edges = 4 * [None]
         for j in range(4):
             v_count_perim = len(perim_refined[j])
-            perim_vidx = np.arange(v_count, v_count + v_count_perim)
+            perim_vidx = np.empty(v_count_perim, dtype=np.int32)
             mask = np.full(v_count_perim, True)
             v_count_new = 0
             for i, p in enumerate(perim_refined[j]):
@@ -120,11 +121,9 @@ def build_boundary_PSLGs(segments, Lx, Ly, Lz):
         points[(points_ax[i], i)] = 0.
 
     # reindex edge vertices
-    points_segments, edges_ax = zip(*[
+    points_segments, edges_ax = [list(x) for x in zip(*[
         reindex_edges(points, points_ax[i], edges_ax[i]) for i in range(3)
-        # reindex_edges_old(points, points_ax[i], edges_ax[i]) for i in range(3)
-    ])
-
+    ])]
     perim = perim_refined = 3 * [4 * [None]]
     perim_segs = np.array([[0, 1], [1, 2], [2, 3], [3, 0]])
 
@@ -158,6 +157,9 @@ def build_boundary_PSLGs(segments, Lx, Ly, Lz):
                 perim[j][i+2] = perim[j][i] - translate
                 perim_refined[j][i+2] = perim_refined[j][i] - translate
 
+        # Add the corner points so that duplicate coners can be filtered out
+        # in build_perim_edge_list
+        points_segments[j] = np.append(points_segments[j], corners, axis=0)
         # Put coordinates back in proper order for this axis
         points_segments[j][:,(j,(j+1)%3,(j+2)%3)] = points_segments[j][:,(0,1,2)]
 
