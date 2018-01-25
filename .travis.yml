@@ -1,0 +1,10 @@
+language: python
+
+python:
+  - "2.7"
+  - "3.5"
+
+script:
+  - pip install .
+  - py.test -v
+
