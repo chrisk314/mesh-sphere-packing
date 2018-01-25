@@ -8,9 +8,10 @@ setup(
         'boundaries from packings of spheres.',
     packages=find_packages(),
     install_requires=[
-        'numpy',
-        'scipy',
-        'meshpy'
+        'numpy>=1.14.0',
+        'scipy>=1.0.0',
+        'meshpy>=2016.1.2',
+        'pyvtk>=0.5.18'
     ],
     author='Chris Knight',
     author_email='chrisk314@gmail.com',
