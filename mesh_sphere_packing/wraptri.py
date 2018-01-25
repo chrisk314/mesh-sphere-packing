@@ -1,35 +1,60 @@
 
 import ctypes
+import os
+
 import numpy as np
 from numpy import ctypeslib as ctl
 
-libname = 'libwraptri.so'
-libdir = './src'
-lib = ctl.load_library(libname, libdir)
+libwraptri = ctl.load_library(
+    'libwraptri.so', os.path.join(os.path.dirname(__file__), 'src')
+)
 
-lib.wrap_tri.argtypes = [
+
+def wrapped_ndptr(*args, **kwargs):
+    base = ctl.ndpointer(*args, **kwargs)
+
+    def from_param(cls, obj):
+        if obj is None:
+            return obj
+        return base.from_param(obj)
+
+    return type(
+        base.__name__, (base,),
+        {'from_param': classmethod(from_param)}
+    )
+
+
+Float64ArrayType = wrapped_ndptr(dtype=np.float64, flags='aligned, c_contiguous')
+Int32ArrayType = wrapped_ndptr(dtype=np.int32, flags='aligned, c_contiguous')
+
+libwraptri.wrap_tri.argtypes = [
     ctypes.c_char_p,
-    ctl.ndpointer(np.float64, flags='aligned, c_contiguous'),
-    ctl.ndpointer(np.float64, flags='aligned, c_contiguous'),
+    Float64ArrayType,
+    Float64ArrayType,
     ctypes.c_int,
     ctypes.c_int,
-    ctl.ndpointer(np.int32, flags='aligned, c_contiguous'),
-    ctl.ndpointer(np.float64, flags='aligned, c_contiguous'),
+    Int32ArrayType,
+    Float64ArrayType,
+    ctypes.c_int,
+    Float64ArrayType,
     ctypes.c_int,
 ]
 
 
 def triangulate(points, point_markers, options="p", point_attributes=None,\
-        regions=None):
-    lib.wrap_tri(
+        holes=None, regions=None):
+
+    libwraptri.wrap_tri(
         ctypes.c_char_p(options.encode('utf-8')),
         points,
         point_attributes,
         points.shape[0],
-        point_attributes.shape[1],
+        point_attributes.shape[1] if np.any(point_attributes) else 0,
         point_markers,
+        holes,
+        holes.shape[0] if np.any(holes) else 0,
         regions,
-        regions.shape[0]
+        regions.shape[0] if np.any(regions) else 0
     )
 
 

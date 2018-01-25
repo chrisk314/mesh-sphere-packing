@@ -138,18 +138,25 @@ int reportnorms;
 /*                                                                           */
 /*****************************************************************************/
 
-int wrap_tri(char* options, double* points, double* pointattributes,\
+int wrap_tri(char* options, double* pointlist, double* pointattributes,\
     int numberofpoints, int numberofpointattributes, int* pointmarkerlist,\
+    double* holelist, int numberofholes,
     double* regionlist, int numberofregions)
 {
   struct triangulateio in, mid, out, vorout;
 
+  /* Initialise input triangulateio pointers to NULL */
+  in.pointlist = NULL; in.pointattributelist = NULL; in.pointmarkerlist = NULL;
+  in.trianglelist = NULL; in.triangleattributelist = NULL; in.trianglearealist = NULL;
+  in.segmentlist = NULL; in.segmentmarkerlist = NULL;
+  in.holelist = NULL; in.regionlist = NULL;
+  
   /* Define input points. */
 
   in.numberofpoints = numberofpoints;
   in.pointlist = (REAL *) malloc(in.numberofpoints * 2 * sizeof(REAL));
   for (int i=0; i<2*in.numberofpoints; i++)
-    in.pointlist[i] = points[i];
+    in.pointlist[i] = pointlist[i];
 
   in.numberofpointattributes = numberofpointattributes;
   in.pointattributelist = (REAL *) malloc(in.numberofpoints *
@@ -163,11 +170,20 @@ int wrap_tri(char* options, double* points, double* pointattributes,\
     in.pointmarkerlist[i] = pointmarkerlist[i];
 
   in.numberofsegments = 0;
-  in.numberofholes = 0;
+
+  in.numberofholes = numberofholes;
+  if (in.numberofholes > 0) {
+    in.holelist = (REAL *) malloc(2 * in.numberofholes * sizeof(REAL));
+    for (int i=0; i<2*numberofholes; i++)
+      in.holelist[i] = holelist[i];
+  }
+
   in.numberofregions = numberofregions;
-  in.regionlist = (REAL *) malloc(in.numberofregions * 4 * sizeof(REAL));
-  for (int i=0; i<4*numberofregions; i++)
-    in.regionlist[i] = regionlist[i];
+  if (in.numberofregions > 0){
+    in.regionlist = (REAL *) malloc(in.numberofregions * 4 * sizeof(REAL));
+    for (int i=0; i<4*numberofregions; i++)
+      in.regionlist[i] = regionlist[i];
+  }
 
   printf("Input point set:\n\n");
   report(&in, 1, 0, 0, 0, 0, 0);
@@ -239,8 +255,9 @@ int wrap_tri(char* options, double* points, double* pointattributes,\
 
   free(in.pointlist);
   free(in.pointattributelist);
-  free(in.pointmarkerlist);
-  free(in.regionlist);
+  if (in.pointmarkerlist != NULL) free(in.pointmarkerlist);
+  if (in.holelist != NULL) free(in.holelist);
+  if (in.regionlist != NULL) free(in.regionlist);
   free(mid.pointlist);
   free(mid.pointattributelist);
   free(mid.pointmarkerlist);
