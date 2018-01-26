@@ -128,48 +128,47 @@ def build_boundary_PSLGs(segments, Lx, Ly, Lz):
 
     perim_edges = []
 
-    # TODO : Fix the confusing indices i <-> j here
-    for j in range(3):
+    for i in range(3):
         # Rotate coordinate system by cyclic permutation of axes
-        points_segments[j][:,(0,1,2)] = points_segments[j][:,(j,(j+1)%3,(j+2)%3)]
+        points_segments[i][:,(0,1,2)] = points_segments[i][:,(i,(i+1)%3,(i+2)%3)]
 
         corners = np.array([
             [0., 0., 0.], [0., L[1], 0.], [0., L[1], L[2]], [0., 0., L[2]]
         ])
 
         points_on_perim = 4 * [None]
-        points_on_perim[0] = np.isclose(points_segments[j][:, 2], 0.)
-        points_on_perim[1] = np.isclose(points_segments[j][:, 1], L[1])
-        points_on_perim[2] = np.isclose(points_segments[j][:, 2], L[2])
-        points_on_perim[3] = np.isclose(points_segments[j][:, 1], 0.)
+        points_on_perim[0] = np.isclose(points_segments[i][:, 2], 0.)
+        points_on_perim[1] = np.isclose(points_segments[i][:, 1], L[1])
+        points_on_perim[2] = np.isclose(points_segments[i][:, 2], L[2])
+        points_on_perim[3] = np.isclose(points_segments[i][:, 1], 0.)
 
-        for i in range(2 + 2 * int(not WITH_PBC)):
-            axis = 1 + i % 2
-            perim[j][i] = np.vstack(
-                (corners[perim_segs[i]], points_segments[j][points_on_perim[i]])
+        for j in range(2 + 2 * int(not WITH_PBC)):
+            axis = 1 + j % 2
+            perim[i][j] = np.vstack(
+                (corners[perim_segs[j]], points_segments[i][points_on_perim[j]])
             )
             if WITH_PBC:
                 translate = np.array([0., 0., -L[2]]) if axis == 1\
                     else np.array([0., L[1], 0.])
-                translated_points = points_segments[j][points_on_perim[i + 2]]\
+                translated_points = points_segments[i][points_on_perim[j + 2]]\
                     + translate
-                perim[j][i] = np.vstack((perim[j][i], translated_points))
-            perim[j][i] = perim[j][i][perim[j][i][:, axis].argsort()]
-            perim_refined[j][i] = refined_perimeter(perim[j][i], axis)
+                perim[i][j] = np.vstack((perim[i][j], translated_points))
+            perim[i][j] = perim[i][j][perim[i][j][:, axis].argsort()]
+            perim_refined[i][j] = refined_perimeter(perim[i][j], axis)
             if WITH_PBC:
-                perim[j][i+2] = perim[j][i] - translate
-                perim_refined[j][i+2] = perim_refined[j][i] - translate
+                perim[i][j+2] = perim[i][j] - translate
+                perim_refined[i][j+2] = perim_refined[i][j] - translate
 
         # Add the corner points so that duplicate coners can be filtered out
         # in build_perim_edge_list
-        points_segments[j] = np.append(points_segments[j], corners, axis=0)
+        points_segments[i] = np.append(points_segments[i], corners, axis=0)
 
         perim_edges.append(
-            build_perim_edge_list(points_segments[j], perim_refined[j])
+            build_perim_edge_list(points_segments[i], perim_refined[i])
         )
 
         # Put coordinates back in proper order for this axis
-        points_segments[j][:,(j,(j+1)%3,(j+2)%3)] = points_segments[j][:,(0,1,2)]
+        points_segments[i][:,(i,(i+1)%3,(i+2)%3)] = points_segments[i][:,(0,1,2)]
 
         L = L[np.newaxis, (1, 2, 0)][0]
 
