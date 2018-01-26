@@ -126,6 +126,9 @@ def build_boundary_PSLGs(segments, Lx, Ly, Lz):
     perim = perim_refined = 3 * [4 * [None]]
     perim_segs = np.array([[0, 1], [1, 2], [2, 3], [3, 0]])
 
+    perim_edges = []
+
+    # TODO : Fix the confusing indices i <-> j here
     for j in range(3):
         # Rotate coordinate system by cyclic permutation of axes
         points_segments[j][:,(0,1,2)] = points_segments[j][:,(j,(j+1)%3,(j+2)%3)]
@@ -148,7 +151,8 @@ def build_boundary_PSLGs(segments, Lx, Ly, Lz):
             if WITH_PBC:
                 translate = np.array([0., 0., -L[2]]) if axis == 1\
                     else np.array([0., L[1], 0.])
-                translated_points = points_segments[j][points_on_perim[i + 2]] + translate
+                translated_points = points_segments[j][points_on_perim[i + 2]]\
+                    + translate
                 perim[j][i] = np.vstack((perim[j][i], translated_points))
             perim[j][i] = perim[j][i][perim[j][i][:, axis].argsort()]
             perim_refined[j][i] = refined_perimeter(perim[j][i], axis)
@@ -159,18 +163,17 @@ def build_boundary_PSLGs(segments, Lx, Ly, Lz):
         # Add the corner points so that duplicate coners can be filtered out
         # in build_perim_edge_list
         points_segments[j] = np.append(points_segments[j], corners, axis=0)
+
+        perim_edges.append(
+            build_perim_edge_list(points_segments[j], perim_refined[j])
+        )
+
         # Put coordinates back in proper order for this axis
         points_segments[j][:,(j,(j+1)%3,(j+2)%3)] = points_segments[j][:,(0,1,2)]
 
         L = L[np.newaxis, (1, 2, 0)][0]
 
     # TODO : refactor so boundary PSLG is built during above loop avoiding subsequent loops
-
-    # Build lists of perimeter edges
-    perim_edges = [
-        build_perim_edge_list(points_segments[i], perim_refined[i])
-        for i in range(3)
-    ]
 
     # add holes
     pslg_holes = add_holes(segments)
