@@ -30,6 +30,16 @@ def filter_points(points, r, strength=0.15):
     """Return array of filtered points excluding points lying too close
     to domain boundaries.
     """
+    # TODO : This is a quick and dirty fix to prevent removal of points
+    #      : for particles which do not cross boundaries. Ultimately these
+    #      : cases needs to be handled in a more generally, comprehensively.
+    out_x = points[:, 0] < 0.
+    out_y = points[:, 1] < 0.
+    out_z = points[:, 2] < 0.
+
+    if not np.any([out_x, out_y, out_z]):
+        return points
+
     cutoff = strength * (len(points) / (4. * np.pi * r**2.))**-0.5
     close_x = np.abs(points[:,0]) < cutoff
     close_y = np.abs(points[:,1]) < cutoff
@@ -42,6 +52,12 @@ def split_sphere_points_segments(points, x, y, z, r, Lx, Ly, Lz):
     out_x = points[:, 0] < 0.
     out_y = points[:, 1] < 0.
     out_z = points[:, 2] < 0.
+
+    # TODO : This is a quick and dirty fix to allow points for particles
+    #      : inside the domain to be added without issue. Ultimately these
+    #      : cases needs to be handled in a more generally, comprehensively.
+    if not np.any([out_x, out_y, out_z]):
+        return [points]
 
     segments = [
         points[~out_x & ~out_y & ~out_z],
