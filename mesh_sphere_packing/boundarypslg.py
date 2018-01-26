@@ -65,7 +65,8 @@ def build_boundary_PSLGs(segments, Lx, Ly, Lz):
                         0.5 * (points_ax[:,j].max() + points_ax[:,j].min()),
                         0.5 * (points_ax[:,k].max() + points_ax[:,k].min())
                     ])
-            holes[i] = np.vstack(holes[i]) if len(holes[i]) else []
+            holes[i] = np.vstack(holes[i]) if len(holes[i])\
+                else np.empty((0,2), dtype=np.float64)
         return holes
 
     def reindex_edges(points, points_ax, edges_ax):
