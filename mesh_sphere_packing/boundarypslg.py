@@ -3,6 +3,8 @@ import numpy as np
 from numpy import linalg as npl
 from meshpy import triangle
 
+from mesh_sphere_packing.area_constraints import build_area_constraint_grid
+
 WITH_PBC = True
 
 # TODO : change nomenclature. Segment is used in geometry to refer to an
@@ -189,7 +191,10 @@ def build_boundary_PSLGs(segments, Lx, Ly, Lz):
     return boundary_pslgs
 
 
-def triangulate_PSLGs(pslgs):
+def triangulate_PSLGs(pslgs, args):
+
+    area_constraints = build_area_constraint_grid(args)
+
     triangulated_boundaries = []
     for i, (points, edges, holes) in enumerate(pslgs):
         # Set mesh info for triangulation
@@ -209,7 +214,8 @@ def triangulate_PSLGs(pslgs):
             mesh_data,
             max_volume=max_volume,
             min_angle=min_angle,
-            allow_boundary_steiner=False
+            allow_boundary_steiner=False,
+            refinement_func=None
         )
 
         # Extract triangle vertices from triangulation adding back x coord
@@ -226,4 +232,4 @@ def triangulate_PSLGs(pslgs):
 def boundarypslg(segments, args):
     Lx, Ly, Lz = args.domain_dimensions
     boundary_pslgs = build_boundary_PSLGs(segments, Lx, Ly, Lz)
-    return triangulate_PSLGs(boundary_pslgs)
+    return triangulate_PSLGs(boundary_pslgs, args)
