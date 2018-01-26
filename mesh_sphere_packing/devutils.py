@@ -18,7 +18,7 @@ def write_geomview(points, tris, fname):
 
 def output_segments_geomview(segments):
     for i, (points, tris) in enumerate(segments):
-        write_geomview(points, tris, './segments_%d.off' % i)
+        write_geomview(points, tris, './segment_%d.off' % i)
 
 
 def output_boundaries_geomview(boundaries):
