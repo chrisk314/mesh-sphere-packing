@@ -121,3 +121,78 @@ def plot_polys(polys):
     fc = ["crimson" if i%2 else "gold" for i in range(len(polys))]
     ax.add_collection3d(Poly3DCollection(poly3d, facecolors=fc, linewidths=1))
     plt.show()
+<<<<<<< Updated upstream
+=======
+
+
+def plot_added_points(particles, points, L, axis):
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Circle, Rectangle
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.add_artist(Rectangle([0., 0.], L[0], L[1], fill=False))
+    circles = [
+        Circle(p[[(axis+1)%3,(axis+2)%3]], radius=p[3], color='b', fill=False)
+        for p in particles
+    ]
+    for c in circles:
+        ax.add_artist(c)
+    ax.scatter(points[:,0], points[:,1], marker='.')
+    plt.axis('off')
+    plt.xlim([-0.1, L[0]+0.1])
+    plt.ylim([-0.1, L[1]+0.1])
+    plt.axes().set_aspect('equal', 'datalim')
+    plt.show()
+
+
+def test_tri_refinefunc(rfunc=None):
+    from meshpy import triangle
+    L = np.array([2., 2.])
+    points = np.array([
+        [0., 0.], [L[0], 0.], [L[0], L[1]], [0., L[1]]
+    ])
+    edges = np.array([
+        [0, 1], [1, 2], [2, 3], [3, 0]
+    ])
+    mesh_data = triangle.MeshInfo()
+    mesh_data.set_points(points)
+    mesh_data.set_facets(edges.tolist())
+
+    max_volume = 0.2**2
+    min_angle = 20.
+
+    mesh = triangle.build(
+        mesh_data,
+        max_volume=max_volume,
+        min_angle=min_angle,
+        refinement_func=rfunc
+    )
+
+    # Extract triangle vertices from triangulation adding back x coord
+    points = np.column_stack((
+        np.zeros(len(mesh.points)), np.array(mesh.points))
+    )
+    tris = np.array(mesh.elements, dtype=np.int32)
+    holes = np.empty((0,3), dtype=np.float64)
+
+    return points, tris, holes
+
+
+ONE_THIRD = 0.3333333333333333
+TARGET_AREA = 0.2**2
+Lx, Ly = 2., 2.
+INV_Lx, INV_Ly = 1. / Lx, 1. / Ly
+particles = np.array([[0.5, 0.5, 0.5, 0.4], [0.8, 1., 1., 0.6]]).tolist()
+TARGET_AREA_GRID = [[TARGET_AREA, 0.1 * TARGET_AREA],[0.1 * TARGET_AREA, TARGET_AREA]]
+nx, ny = 2, 2
+inv_dx, inv_dy = nx / Lx, ny / Ly
+
+
+def rfunc(vertices, area):
+    (ox, oy), (dx, dy), (ax, ay) = vertices
+    cx = ONE_THIRD * (ox + dx + ax)  # Triangle center x coord.
+    cy = ONE_THIRD * (oy + dy + ay)  # Triangle center y coord.
+    ix = int(cx * inv_dx)
+    iy = int(cy * inv_dy)
+    target_area = TARGET_AREA_GRID[ix][iy]
+    return int(area > target_area)  # True -> 1 means refine
