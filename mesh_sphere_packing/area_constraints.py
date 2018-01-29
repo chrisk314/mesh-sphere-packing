@@ -26,7 +26,34 @@ def translate_upper_particles(particles_upper, axis, L):
     return particles_upper
 
 
-def build_area_constraint_grid(args):
+def area_constraint(x, y):
+    """Return value for area constraint factor at coordinates x, y based
+    on particle positions.
+    """
+    # TODO : implement this.
+    return 0.01
+
+
+def constraint_grid(particles, axis, L, ds):
+    # TODO : Replace this magic number
+    s = 2. * ds
+    Lx, Ly = L[(axis+1)%3], L[(axis+2)%3]
+    nx, ny = int(Lx / s), int(Ly / s)  # number of cells in the grid
+    dx, dy = Lx / nx, Ly / ny
+
+    x = np.arange(0.5 * dx, Lx, dx)
+    y = np.arange(0.5 * dy, Ly, dy)
+    # TODO : Improve variable naming here.
+    return [[area_constraint(_x, _y) for _x in x] for _y in y]
+
+    # xy_grid = np.array(np.meshgrid(x, y)).T
+    # area_constraints = np.array([
+        # area_constraint(xy) for xy in xy_grid
+    # ]).reshape((nx, ny))
+    # return area_constraints.tolist()
+
+
+def build_area_constraint_grid(args, ds):
     # TODO : Change this to use particle data read from file. For now mocking
     #      : up a single particle from the command line args
     particles = np.array([args.particle_center + [args.particle_radius]])
@@ -35,7 +62,7 @@ def build_area_constraint_grid(args):
     #      : as part of state in some as yet to be implemented class. Same applies
     #      : to the domain dimensions.
     cutoff = 0.5
-    L = args.domain_dimensions
+    L = np.array(args.domain_dimensions)
 
     p_ax = [
         filter_particles(particles, cutoff, axis, L[axis])
@@ -46,7 +73,10 @@ def build_area_constraint_grid(args):
         for axis, p in enumerate(p_ax)
     ]
 
-    area_constraints = []
+
+    area_constraints = [
+        constraint_grid(p, axis, L, ds) for axis, p in enumerate(p_ax)
+    ]
     # TODO : populate the area constraint grid with interpolated values of
     #      : some sizing function, which depends on the particle positions,
     #      : f(cx,cy) -> R, where cx and cy are the triangle center coordinates.

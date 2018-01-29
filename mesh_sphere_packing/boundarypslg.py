@@ -5,6 +5,7 @@ from meshpy import triangle
 
 from mesh_sphere_packing.area_constraints import build_area_constraint_grid
 
+ONE_THIRD = 0.3333333333333333
 WITH_PBC = True
 
 # TODO : change nomenclature. Segment is used in geometry to refer to an
@@ -193,10 +194,38 @@ def build_boundary_PSLGs(segments, Lx, Ly, Lz):
 
 def triangulate_PSLGs(pslgs, args):
 
-    area_constraints = build_area_constraint_grid(args)
+    # TODO : set max_volume based on geometry
+    points, edges, _ = pslgs[0]
+    ds = np.mean(npl.norm(points[edges[:,0]] - points[edges[:,1]], axis=1))
+
+    # TODO : rather than passing ds this should be available in some class.
+    area_constraints = build_area_constraint_grid(args, ds)
 
     triangulated_boundaries = []
     for i, (points, edges, holes) in enumerate(pslgs):
+
+        target_area_grid = area_constraints[i]
+
+        # TODO : reproducing code to calculate inv_dx and inv_dx here for now
+        #      : area constraint grid and inv_dx, and inv_dy should be accessible
+        #      : from a class.
+        L = np.array(args.domain_dimensions)
+        s = 2. * ds
+        Lx, Ly = L[(i+1)%3], L[(i+2)%3]
+        nx, ny = int(Lx / s), int(Ly / s)  # number of cells in the grid
+        dx, dy = Lx / nx, Ly / ny
+        inv_dx, inv_dy = 1. / dx, 1./dy
+
+        def rfunc(vertices, area):
+            (ox, oy), (dx, dy), (ax, ay) = vertices
+            cx = ONE_THIRD * (ox + dx + ax)  # Triangle center x coord.
+            cy = ONE_THIRD * (oy + dy + ay)  # Triangle center y coord.
+            ix = int(cx * inv_dx)
+            iy = int(cy * inv_dy)
+            target_area = target_area_grid[ix][iy]
+            return int(area > target_area)  # True -> 1 means refine
+
+
         # Set mesh info for triangulation
         mesh_data = triangle.MeshInfo()
         mesh_data.set_points(points)
@@ -205,8 +234,6 @@ def triangulate_PSLGs(pslgs, args):
             mesh_data.set_holes(holes)
 
         # Call triangle library to perform Delaunay triangulation
-        # TODO : set max_volume based on geometry
-        ds = np.mean(npl.norm(points[edges[:,0]] - points[edges[:,1]], axis=1))
         max_volume = ds**2
         min_angle = 20.
 
@@ -215,7 +242,7 @@ def triangulate_PSLGs(pslgs, args):
             max_volume=max_volume,
             min_angle=min_angle,
             allow_boundary_steiner=False,
-            refinement_func=None
+            refinement_func=rfunc
         )
 
         # Extract triangle vertices from triangulation adding back x coord
