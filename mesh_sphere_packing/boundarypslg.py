@@ -16,11 +16,11 @@ def build_boundary_PSLGs(segments, Lx, Ly, Lz):
     def compile_points_edges(segments):
 
         def build_edge_list(tris, points):
-            v_adj = np.zeros(2*[points.shape[0]], dtype=np.int64)
+            v_adj = np.zeros(2*[points.shape[0]], dtype=np.int32)
             v_adj[tris[:,0], tris[:,1]] = v_adj[tris[:,1], tris[:,0]] = 1
             v_adj[tris[:,1], tris[:,2]] = v_adj[tris[:,2], tris[:,1]] = 1
             v_adj[tris[:,2], tris[:,0]] = v_adj[tris[:,0], tris[:,2]] = 1
-            return np.array(np.where(np.triu(v_adj) == 1)).T
+            return np.array(np.where(np.triu(v_adj) == 1), dtype=np.int32).T
 
         vcount = 0
         all_points = []
