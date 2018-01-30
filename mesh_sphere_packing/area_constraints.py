@@ -48,6 +48,11 @@ class AreaConstraints(object):
         particles_upper[:,axis] *= -1
         return particles_upper
 
+    def duplicate_edge_particles(self, particles, axis):
+        # TODO : Need to duplicate particles which cross a boundary perpendicular
+        #      : to axis as they will have geometry at both sides of domain.
+        return particles
+
     def area_constraint(self, x, y):
         """Return value for area constraint factor at coordinates x, y based
         on particle positions.
@@ -81,6 +86,10 @@ class AreaConstraints(object):
         ]
         p_ax = [
             np.vstack((p[0], self.translate_upper_particles(p[1], axis)))
+            for axis, p in enumerate(p_ax)
+        ]
+        p_ax = [
+            self.duplicate_edge_particles(p, axis)
             for axis, p in enumerate(p_ax)
         ]
         self.grid = [
