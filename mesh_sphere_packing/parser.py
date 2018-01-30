@@ -58,3 +58,7 @@ parser.add_argument(
     '-p', '--particle-file', type=FileType(mode='r'), required=False, metavar='FILE',
     help='path to file specifying particle data (see main description)'
 )
+parser.add_argument(
+    '-c', '--config-file', type=FileType(mode='r'), required=False, metavar='FILE',
+    help='path to yaml config file'
+)

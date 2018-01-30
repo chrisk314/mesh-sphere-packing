@@ -2,3 +2,4 @@ meshpy
 numpy
 scipy
 pyvtk
+pyyaml

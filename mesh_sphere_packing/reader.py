@@ -1,8 +1,14 @@
 
 import numpy as np
+import yaml
+from collections import namedtuple
 
 
-class ParticleFileReaderException(Exception):
+class ParticleFileReaderError(Exception):
+    pass
+
+
+class ConfigFileReaderError(Exception):
     pass
 
 
@@ -29,7 +35,9 @@ def read_particle_file(pfile):
 
     Particles need not be specified in order of id or any other order. The ids are
     used to specify boundary conditions on the particle surfaces.
-    :param fname: string specifying path of particle data file.
+    :param fname: path of particle data file.
+    :returns: tuple consisting of a numpy array of domain dimensions, a numpy
+    array of periodic boundary flags, and a numpy array of particle data.
     """
     with pfile as f:
         try:
@@ -37,7 +45,7 @@ def read_particle_file(pfile):
                 [float(tok) for tok in f.readline().strip().split()[:3]]
             )
         except Exception as e:
-            raise ParticleFileReaderException(
+            raise ParticleFileReaderError(
                 'Domain extents in particle data file invalid.'
             ) from e
         try:
@@ -45,32 +53,65 @@ def read_particle_file(pfile):
                 [bool(tok) for tok in f.readline().strip().split()[:3]]
             )
         except Exception as e:
-            raise ParticleFileReaderException(
+            raise ParticleFileReaderError(
                 'PBC flags in particle data file invalid.'
             ) from e
         try:
             particles = np.loadtxt(f, dtype=np.float64)
         except Exception as e:
-            raise ParticleFileReaderException(
+            raise ParticleFileReaderError(
                 'Could not read particle data in particle data file.'
             ) from e
         try:
             assert particles.shape[0] > 0
         except AssertionError as e:
-            raise ParticleFileReaderException(
+            raise ParticleFileReaderError(
                 'No particles specified in particle data file.'
             ) from e
         try:
             assert particles.shape[1] == 5
         except AssertionError as e:
-            raise ParticleFileReaderException(
+            raise ParticleFileReaderError(
                 'Incorrect number of particle attributes in particle data file.'
             ) from e
         try:
             assert not np.any(particles[:,1:] < 0.)
         except AssertionError as e:
-            raise ParticleFileReaderException(
+            raise ParticleFileReaderError(
                 'Invalid values for particle data in particle data file.'
             ) from e
     return L, PBC, particles
 
+
+def read_config_file(cfile):
+    """Loads optional user configuration from a .yaml file.
+    :param cfile: path of yaml config file.
+    :returns: namedtuple 'Config' object containing config.
+    """
+    # TODO : Describe available configurable options.
+    config = {
+        'particle_file': None,
+        'allow_overlaps': False,  # Overlaps not currently supported
+        'tetgen_rad_edge_ratio': 1.4,
+        'tetgen_min_angle': 18.,
+        'tetgen_max_volume': 1.0e-05,
+        'surf_mesh_factor': 1.0e-01,
+    }
+    if cfile:
+        with cfile as f:
+            try:
+                user_config = yaml.load(f.read())
+            except yaml.YAMLError as e:
+                raise ConfigFileReaderError('Config file invalid.') from e
+        unsupported = list(set(user_config.keys()) - set(config.keys()))
+        if unsupported:
+            import warnings
+            for k in unsupported:
+                msg = 'Ignored unsupported configuration options: {}'.format(k)
+                warnings.warn(msg)
+                user_config.pop(k)
+        # TODO : Should check user options are valid and apply argument type
+        #      : conversions.
+        config.update(user_config)
+        config['allow_overlaps'] = bool(config['allow_overlaps'])
+    return namedtuple('Config', config.keys())(**config)
