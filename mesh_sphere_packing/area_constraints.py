@@ -1,20 +1,26 @@
 
 import numpy as np
 
+from mesh_sphere_packing import ONE_THIRD, GROWTH_LIMIT
+
 
 class AreaConstraints(object):
 
     """Constructs grid of area constraints for triangulation of domain boundaries.
     """
 
+    cutoff = 0.5        # Distance beyond which particles do not force added points
+    cell_width = 2.     # Width of grid cells in units of characteristic length, ds
+
     def __init__(self, args, ds):
         # TODO : cutoff distance is dependent on mesh resolution and should exist
         #      : as part of state in some as yet to be implemented class. Same applies
         #      : to the domain dimensions.
-        self.cutoff = 0.5
+        self.ds = ds
+        self.dA = ds**2
         self.L = np.array(args.domain_dimensions)
         self.inv_dx, self.inv_dy = 3 * [None], 3 * [None]
-        self.build_area_constraint_grid(args, ds)
+        self.build_area_constraint_grid(args)
 
     def filter_particles(self, particles, axis):
         """Return particles which are close to the boundary along specified
@@ -49,13 +55,13 @@ class AreaConstraints(object):
         # TODO : populate the area constraint grid with interpolated values of
         #      : some sizing function, which depends on the particle positions,
         #      : f(cx,cy) -> R, where cx and cy are the triangle center coordinates.
-        return 0.01
+        growth = GROWTH_LIMIT
+        return self.dA * growth
 
-    def constraint_grid(self, particles, axis, ds):
-        # TODO : Replace this magic number
-        s = 2. * ds
+    def constraint_grid(self, particles, axis):
+        width = self.cell_width * self.ds
         Lx, Ly = self.L[(axis+1)%3], self.L[(axis+2)%3]
-        nx, ny = int(Lx / s), int(Ly / s)  # number of cells in the grid
+        nx, ny = int(Lx / width), int(Ly / width)  # number of cells in the grid
         dx, dy = Lx / nx, Ly / ny
         self.inv_dx[axis], self.inv_dy[axis] = 1. / dx, 1. / dy
 
@@ -64,7 +70,7 @@ class AreaConstraints(object):
         # TODO : Improve variable naming here.
         return [[self.area_constraint(_x, _y) for _x in x] for _y in y]
 
-    def build_area_constraint_grid(self, args, ds):
+    def build_area_constraint_grid(self, args):
         # TODO : Change this to use particle data read from file. For now mocking
         #      : up a single particle from the command line args
         particles = np.array([args.particle_center + [args.particle_radius]])
@@ -78,5 +84,5 @@ class AreaConstraints(object):
             for axis, p in enumerate(p_ax)
         ]
         self.grid = [
-            self.constraint_grid(p, axis, ds) for axis, p in enumerate(p_ax)
+            self.constraint_grid(p, axis) for axis, p in enumerate(p_ax)
         ]

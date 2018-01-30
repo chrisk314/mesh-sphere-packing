@@ -3,9 +3,9 @@ import numpy as np
 from numpy import linalg as npl
 from meshpy import triangle
 
+from mesh_sphere_packing import ONE_THIRD, GROWTH_LIMIT
 from mesh_sphere_packing.area_constraints import AreaConstraints
 
-ONE_THIRD = 0.3333333333333333
 WITH_PBC = True
 
 # TODO : change nomenclature. Segment is used in geometry to refer to an
@@ -226,7 +226,7 @@ def triangulate_PSLGs(pslgs, args):
             mesh_data.set_holes(holes)
 
         # Call triangle library to perform Delaunay triangulation
-        max_volume = ds**2
+        max_volume = GROWTH_LIMIT * ds**2
         min_angle = 20.
 
         mesh = triangle.build(
