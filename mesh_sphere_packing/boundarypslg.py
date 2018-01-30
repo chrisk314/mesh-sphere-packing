@@ -3,7 +3,7 @@ import numpy as np
 from numpy import linalg as npl
 from meshpy import triangle
 
-from mesh_sphere_packing.area_constraints import build_area_constraint_grid
+from mesh_sphere_packing.area_constraints import AreaConstraints
 
 ONE_THIRD = 0.3333333333333333
 WITH_PBC = True
@@ -199,22 +199,14 @@ def triangulate_PSLGs(pslgs, args):
     ds = np.mean(npl.norm(points[edges[:,0]] - points[edges[:,1]], axis=1))
 
     # TODO : rather than passing ds this should be available in some class.
-    area_constraints = build_area_constraint_grid(args, ds)
+    area_constraints = AreaConstraints(args, ds)
 
     triangulated_boundaries = []
     for i, (points, edges, holes) in enumerate(pslgs):
 
-        target_area_grid = area_constraints[i]
-
-        # TODO : reproducing code to calculate inv_dx and inv_dx here for now
-        #      : area constraint grid and inv_dx, and inv_dy should be accessible
-        #      : from a class.
-        L = np.array(args.domain_dimensions)
-        s = 2. * ds
-        Lx, Ly = L[(i+1)%3], L[(i+2)%3]
-        nx, ny = int(Lx / s), int(Ly / s)  # number of cells in the grid
-        dx, dy = Lx / nx, Ly / ny
-        inv_dx, inv_dy = 1. / dx, 1./dy
+        target_area_grid = area_constraints.grid[i]
+        inv_dx = area_constraints.inv_dx[i]
+        inv_dy = area_constraints.inv_dy[i]
 
         def rfunc(vertices, area):
             (ox, oy), (dx, dy), (ax, ay) = vertices
