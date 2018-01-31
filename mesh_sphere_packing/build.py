@@ -6,9 +6,9 @@ from mesh_sphere_packing.tetmesh import build_tetmesh
 
 
 def build(domain, particles, config):
-    segments = splitsphere(domain, particles, config)
-    boundaries = boundarypslg(domain, particles, segments, config)
-    mesh = build_tetmesh(domain, segments, boundaries, config)
+    sphere_pieces = splitsphere(domain, particles, config)
+    boundaries = boundarypslg(domain, particles, sphere_pieces, config)
+    mesh = build_tetmesh(domain, sphere_pieces, boundaries, config)
     mesh.write_vtk('mesh.vtk')
 
 

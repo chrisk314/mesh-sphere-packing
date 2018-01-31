@@ -15,10 +15,10 @@ def duplicate_lower_boundaries(lower_boundaries, L):
     return lower_boundaries + upper_boundaries
 
 
-def build_point_list(segments, boundaries):
+def build_point_list(sphere_pieces, boundaries):
     vcount = 0
     all_points = []
-    for points, tris in segments:
+    for points, tris in [(p.points, p.tris) for p in sphere_pieces]:
         all_points.append(points)
         tris += vcount
         vcount += points.shape[0]
@@ -29,7 +29,7 @@ def build_point_list(segments, boundaries):
     return np.vstack(all_points)
 
 
-def build_facet_list(segments, boundaries):
+def build_facet_list(sphere_pieces, boundaries):
     all_facets = [tris for _, tris, _ in boundaries]
     all_markers = [
         np.full(len(all_facets[0]), 1), np.full(len(all_facets[3]), 2),
@@ -37,32 +37,32 @@ def build_facet_list(segments, boundaries):
         np.full(len(all_facets[2]), 5), np.full(len(all_facets[5]), 6),
     ]
     fcount = 7
-    for _, tris in segments:
+    for tris in [p.tris for p in sphere_pieces]:
         all_facets.append(tris)
         all_markers.append(np.full(len(tris), fcount))
         fcount += 1
     return np.vstack(all_facets), np.hstack(all_markers)
 
 
-def build_hole_list(segments):
+def build_hole_list(sphere_pieces):
     # TODO : Ultimately each sphere segment will contain hole data
     all_holes = []
-    for points, _ in segments:
+    for points in [p.points for p in sphere_pieces]:
         all_holes.append(0.5 * (points.max(axis=0) + points.min(axis=0)))
     return np.vstack(all_holes)
 
 
-def build_tetmesh(domain, segments, boundaries, config):
+def build_tetmesh(domain, sphere_pieces, boundaries, config):
 
     boundaries = duplicate_lower_boundaries(boundaries, domain.L)
 
-    points = build_point_list(segments, boundaries)
+    points = build_point_list(sphere_pieces, boundaries)
     # Fix boundary points to exactly zero
     for i in range(3):
         points[(np.isclose(points[:,i], 0.), i)] = 0.
 
-    facets, markers = build_facet_list(segments, boundaries)
-    holes = build_hole_list(segments)
+    facets, markers = build_facet_list(sphere_pieces, boundaries)
+    holes = build_hole_list(sphere_pieces)
 
     rad_edge = config.tetgen_rad_edge_ratio
     min_angle = config.tetgen_min_angle
