@@ -11,9 +11,11 @@ def build(args):
     particle_file = args.particle_file or config.particle_file
     if particle_file:
         L, PBC, particles = read_particle_file(particle_file)
+
     segments = splitsphere(args)
     boundaries = boundarypslg(segments, args)
     mesh = build_tetmesh(segments, boundaries, args)
+
     mesh.write_vtk('mesh.vtk')
 
 
