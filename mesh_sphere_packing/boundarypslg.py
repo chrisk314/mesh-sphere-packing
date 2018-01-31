@@ -192,14 +192,7 @@ def build_boundary_PSLGs(segments, Lx, Ly, Lz):
     return boundary_pslgs
 
 
-def triangulate_PSLGs(pslgs, args):
-
-    # TODO : set max_volume based on geometry
-    points, edges, _ = pslgs[0]
-    ds = np.mean(npl.norm(points[edges[:,0]] - points[edges[:,1]], axis=1))
-
-    # TODO : rather than passing ds this should be available in some class.
-    area_constraints = AreaConstraints(args, ds)
+def triangulate_PSLGs(pslgs, area_constraints):
 
     triangulated_boundaries = []
     for i, (points, edges, holes) in enumerate(pslgs):
@@ -226,7 +219,7 @@ def triangulate_PSLGs(pslgs, args):
             mesh_data.set_holes(holes)
 
         # Call triangle library to perform Delaunay triangulation
-        max_volume = GROWTH_LIMIT * ds**2
+        max_volume = area_constraints.dA_max
         min_angle = 20.
 
         mesh = triangle.build(
@@ -248,7 +241,14 @@ def triangulate_PSLGs(pslgs, args):
     return triangulated_boundaries
 
 
-def boundarypslg(segments, args):
-    Lx, Ly, Lz = args.domain_dimensions
-    boundary_pslgs = build_boundary_PSLGs(segments, Lx, Ly, Lz)
-    return triangulate_PSLGs(boundary_pslgs, args)
+def boundarypslg(domain, particles, segments, config):
+    boundary_pslgs = build_boundary_PSLGs(segments, *domain.L)
+
+    # TODO : set max_volume based on geometry
+    points, edges, _ = boundary_pslgs[0]
+    ds = np.mean(npl.norm(points[edges[:,0]] - points[edges[:,1]], axis=1))
+
+    # TODO : rather than passing ds this should be available in some class.
+    area_constraints = AreaConstraints(domain, particles, ds)
+
+    return triangulate_PSLGs(boundary_pslgs, area_constraints)

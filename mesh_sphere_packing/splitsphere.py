@@ -285,16 +285,13 @@ def smooth_segments(segments):
     return segments
 
 
-def splitsphere(args):
-    x, y, z = args.particle_center
-    r = args.particle_radius
-    Lx, Ly, Lz = args.domain_dimensions
-
-    points = gen_sphere_spiral_points(x, y, z, r)
-    points = filter_points(points, r)
+def splitsphere(domain, particles, config):
+    particle = particles[0]
+    points = gen_sphere_spiral_points(*particle[1:])
+    points = filter_points(points, particle[3])
     segment_point_sets = split_sphere_points_segments(
-        points, x, y, z, r, Lx, Ly, Lz
+        points, *particle[1:], *domain.L
     )
-    segments = triangulate_segment_points(segment_point_sets, x, y, z)
+    segments = triangulate_segment_points(segment_point_sets, *particle[1:-1])
     segments = smooth_segments(segments)
-    return translate_segments(segments, Lx, Ly, Lz)
+    return translate_segments(segments, *domain.L)

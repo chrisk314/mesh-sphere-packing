@@ -13,15 +13,17 @@ class AreaConstraints(object):
     cutoff = 0.3        # Distance beyond which particles do not force added points
     cell_width = 1.     # Width of grid cells in units of characteristic length, ds
 
-    def __init__(self, args, ds):
+    def __init__(self, domain, particles, ds):
         # TODO : cutoff distance is dependent on mesh resolution and should exist
         #      : as part of state in some as yet to be implemented class. Same applies
         #      : to the domain dimensions.
         self.ds = ds
         self.dA = ds**2
-        self.L = np.array(args.domain_dimensions)
+        self.dA_max = self.dA * GROWTH_LIMIT
+        self.L = domain.L
+        self.particles = particles[:,1:]
         self.inv_dx, self.inv_dy = 3 * [None], 3 * [None]
-        self.build_area_constraint_grid(args)
+        self.build_area_constraint_grid()
 
     def filter_particles(self, particles, axis):
         """Return particles which are close to the boundary along specified
@@ -94,13 +96,11 @@ class AreaConstraints(object):
             for _y in y
         ]
 
-    def build_area_constraint_grid(self, args):
+    def build_area_constraint_grid(self):
         # TODO : Change this to use particle data read from file. For now mocking
         #      : up a single particle from the command line args
-        particles = np.array([args.particle_center + [args.particle_radius]])
-
         p_ax = [
-            self.filter_particles(particles, axis)
+            self.filter_particles(self.particles, axis)
             for axis in range(3)
         ]
         p_ax = [
