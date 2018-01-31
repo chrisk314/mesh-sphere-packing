@@ -20,14 +20,6 @@ def gen_sphere_spiral_points(x, y, z, r, num_points=200):
     return np.column_stack((vx, vy, vz))
 
 
-def gen_sphere_hypercube_points(x, y, z, r, num_points=500):
-    num_points *= 2
-    points_hyper = 2. * npr.random((num_points, 3)) - 1
-    points = points_hyper[npl.norm(points_hyper, axis=1) < 1.]
-    surface_points = points * np.divide(r, npl.norm(points, axis=1))[:, np.newaxis]
-    return surface_points + np.array([x, y, z])
-
-
 def filter_points(points, r, strength=0.15):
     """Return array of filtered points excluding points lying too close
     to domain boundaries.
