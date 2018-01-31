@@ -233,7 +233,9 @@ def triangulate_segment_points(point_sets, x, y, z):
 
     def extract_surf_from_chull(chull, x, y, z):
         sphere_center = np.array([x, y, z])
-        # TODO : Find a cleaner/simpler/more elegant way of extracting sphere triangles
+        # TODO : Find a cleaner/simpler/more elegant way of extracting sphere triangles.
+        #      : Could check if all x, y, or z components are the same - i.e. triangle
+        #      : lies in a plane.
         tri_norms = get_tri_norms(chull.simplices, chull.points)
         tri_pos_norms = get_tri_centroids_norm(
             chull.simplices, chull.points, sphere_center
