@@ -7,6 +7,38 @@ from scipy.spatial.qhull import ConvexHull
 from mesh_sphere_packing import TOL, ONE_THIRD
 
 
+class Domain(object):
+
+    """Spatial cuboid shaped domain in R^3."""
+
+    def __init__(self, L, PBC):
+        self.L = np.array(L, dtype=np.float64)
+        self.PBC = np.array(PBC, dtype=bool)
+
+
+class Sphere(object):
+
+    """Sphere in R^3 with a unique id."""
+
+    def __init__(self, id, x, r):
+        self.id = int(id)
+        self.x = x
+        self.r = r
+
+
+class SpherePiece(object):
+
+    """Piece of a split sphere resulting from the intersection between
+    a sphere and 0 to 3 planes representing the boundaries of a cuboid
+    domain. The surface of the sphere is represented by a triangulated
+    point set in R^3.
+    """
+
+    def __init__(self, sphere, domain):
+        self.sphere = sphere
+        self.domain = domain
+
+
 def gen_sphere_spiral_points(x, y, z, r, num_points=200):
     indices = np.arange(0, num_points, dtype=float) + 0.5
 
