@@ -55,6 +55,10 @@ parser.add_argument(
     metavar='L', help='list of domain side lengths',
 )
 parser.add_argument(
+    '--pbc', nargs=3, type=int, required=False,
+    metavar='0|1', help='list of periodic boundary flags',
+)
+parser.add_argument(
     '-p', '--particle-file', type=FileType(mode='r'), required=False, metavar='FILE',
     help='path to file specifying particle data (see main description)'
 )
