@@ -189,7 +189,7 @@ class Sphere(object):
 
         if not np.any(self.split_axis):
             # No splits so return the entire sphere
-            return [SpherePiece(self, self.points, np.zeros(3))]
+            return [SpherePiece(self, self.points, np.zeros(3), is_hole=True)]
 
         # Filter out empty pieces
         sphere_pieces = [
@@ -248,16 +248,18 @@ class SpherePiece(object):
     point set in R^3.
     """
 
-    def __init__(self, sphere, points, trans_flag):
+    def __init__(self, sphere, points, trans_flag, is_hole=False):
         self.sphere = sphere
         self.domain = sphere.domain
         self.trans_flag = trans_flag
         self.points = points
+        self.is_hole = is_hole
 
     def construct(self):
         self.triangulate_surface_points()
-        self.apply_laplacian_smoothing()
-        self.translate_points()
+        if not self.is_hole:
+            self.apply_laplacian_smoothing()
+            self.translate_points()
 
     def triangulate_surface_points(self):
 
@@ -271,11 +273,15 @@ class SpherePiece(object):
             surf_tris = chull.simplices[mask]
             return surf_tris
 
-        com = self.points.mean(axis=0)
-        add_point = self.sphere.x - 2. * (com - self.sphere.x)
-        chull = ConvexHull(np.vstack((self.points, add_point)))
-        surf_tris = extract_surface_tris_from_chull(chull, self.sphere)
-        self.points, self.tris = reindex_tris(chull.points, surf_tris)
+        if self.is_hole:
+            chull = ConvexHull(self.points)
+            self.points, self.tris = chull.points, chull.simplices
+        else:
+            com = self.points.mean(axis=0)
+            add_point = self.sphere.x - 2. * (com - self.sphere.x)
+            chull = ConvexHull(np.vstack((self.points, add_point)))
+            surf_tris = extract_surface_tris_from_chull(chull, self.sphere)
+            self.points, self.tris = reindex_tris(chull.points, surf_tris)
 
     def apply_laplacian_smoothing(self):
         # TODO : implement Laplacian smoothing of inner sphere piece vertices
