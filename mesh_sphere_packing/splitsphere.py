@@ -56,7 +56,6 @@ class Sphere(object):
         self.points = None
 
     def initialise_points(self, num_points=200):
-        num_points = 50
         self.gen_spiral_points(num_points=num_points)
         self.filter_points()
         self.min = self.points.min(axis=0)
@@ -262,36 +261,20 @@ class SpherePiece(object):
 
     def triangulate_surface_points(self):
 
-        def _tri_vec_prods(tris, points):
-            tri_points = points[tris]
-            AB = tri_points[:, 1] - tri_points[:, 0]
-            AC = tri_points[:, 2] - tri_points[:, 0]
-            return np.cross(AB, AC)
-
-        def get_tri_norms(tris, points):
-            norms = _tri_vec_prods(tris, points)
-            return np.divide(norms, npl.norm(norms, axis=1)[:, np.newaxis])
-
-        def get_tri_centroids_norm(tris, points, sphere_center):
+        def tri_centroid_disp(tris, points, sphere):
             c = ONE_THIRD * np.sum(points[tris], axis=1)
-            c_rel = c - sphere_center
-            return np.divide(c_rel, npl.norm(c_rel, axis=1)[:, np.newaxis])
+            return npl.norm(c - sphere.x, axis=1)
 
-        def extract_surface_tris_from_chull(chull):
-            # TODO : Find a cleaner/simpler/more elegant way of extracting sphere triangles.
-            #      : Could check if all x, y, or z components are the same - i.e. triangle
-            #      : lies in a plane.
-            tri_norms = get_tri_norms(chull.simplices, chull.points)
-            tri_pos_norms = get_tri_centroids_norm(
-                chull.simplices, chull.points, self.sphere.x
-            )
-            mask = 1. - np.abs(np.sum(tri_pos_norms * tri_norms, axis=1)) < 0.1
+        def extract_surface_tris_from_chull(chull, sphere):
+            tc_disp = tri_centroid_disp(chull.simplices, chull.points, sphere)
+            mask = tc_disp > 0.8 * sphere.r
             surf_tris = chull.simplices[mask]
             return surf_tris
 
-        #chull = ConvexHull(np.vstack((self.points, np.zeros((1,3)))))
-        chull = ConvexHull(self.points)
-        surf_tris = extract_surface_tris_from_chull(chull)
+        com = self.points.mean(axis=0)
+        add_point = self.sphere.x - 2. * (com - self.sphere.x)
+        chull = ConvexHull(np.vstack((self.points, add_point)))
+        surf_tris = extract_surface_tris_from_chull(chull, self.sphere)
         self.points, self.tris = reindex_tris(chull.points, surf_tris)
 
     def apply_laplacian_smoothing(self):
