@@ -121,8 +121,6 @@ def plot_polys(polys):
     fc = ["crimson" if i%2 else "gold" for i in range(len(polys))]
     ax.add_collection3d(Poly3DCollection(poly3d, facecolors=fc, linewidths=1))
     plt.show()
-<<<<<<< Updated upstream
-=======
 
 
 def plot_added_points(particles, points, L, axis):
