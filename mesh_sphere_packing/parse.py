@@ -91,6 +91,24 @@ def get_parser():
 
 
 def load_data(args):
+
+    def extend_domain(L, PBC, particles, ds):
+        for axis in range(3):
+            if not PBC[axis]:
+                pad_extra = 2. * ds
+
+                pad_low = np.min(particles[:,axis+1] - particles[:,4])
+                pad_low -= pad_extra
+                pad_low = abs(pad_low) if pad_low < 0. else 0.
+
+                pad_high = np.max(particles[:,axis+1] + particles[:,4]) - L[axis]
+                pad_high += pad_extra
+                pad_high = pad_high if pad_high > 0. else 0.
+
+                L[axis] += pad_low + pad_high
+                particles[:,axis+1] += pad_low
+        return L, particles
+
     config = read_config_file(args.config_file)
     particle_file = args.particle_file or config.particle_file
     if particle_file:
@@ -109,6 +127,7 @@ def load_data(args):
         particles = np.array([
             [0] + args.particle_center + [args.particle_radius]
         ])
+    L, particles = extend_domain(L, PBC, particles, config.segment_length)
     domain = Domain(L, PBC)
     return domain, particles, config
 
@@ -151,7 +170,7 @@ def read_particle_file(pfile):
             ) from e
         try:
             PBC = np.array(
-                [bool(tok) for tok in f.readline().strip().split()[:3]]
+                [bool(int(tok)) for tok in f.readline().strip().split()[:3]]
             )
         except Exception as e:
             raise ParticleFileReaderError(
