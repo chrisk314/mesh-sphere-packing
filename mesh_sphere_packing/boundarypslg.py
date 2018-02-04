@@ -103,10 +103,39 @@ def build_boundary_PSLGs(domain, sphere_pieces):
             v_count += v_count_new
         return perim_edges
 
+    def add_point_plane_intersections(hole_pieces, axis, L):
+        # TODO : Adding of points or edges which intersect boundaries should
+        #      : be handled more carefully than this during sphere splitting.
+        added_points = []
+        for hole_piece in hole_pieces:
+            if np.isclose(hole_piece.sphere.min[axis], 0.):
+                close = np.where(np.isclose(hole_piece.points[:,axis], 0.))[0]
+                for idx in close:
+                    added_points.append(hole_piece.points[idx])
+            elif np.isclose(hole_piece.sphere.max[axis], L[axis]):
+                close = np.where(np.isclose(hole_piece.points[:,axis], L[axis]))[0]
+                trans = np.zeros(3)
+                trans[axis] = -L[axis]
+                for idx in close:
+                    added_points.append(hole_piece.points[idx] + trans)
+        if added_points:
+            return np.vstack(added_points)
+        else:
+            return np.empty((0,3), dtype=np.float64)
+
     L = domain.L
     PBC = domain.PBC
 
-    points, edges = compile_points_edges(sphere_pieces)
+    sphere_pieces_holes = [p for p in sphere_pieces if p.is_hole]
+    sphere_pieces = [p for p in sphere_pieces if not p.is_hole]
+
+    # TODO : Optimise this by compliling only edges from sphere piece
+    #      : intersection loops rather than considering all edges.
+    if len(sphere_pieces):
+        points, edges = compile_points_edges(sphere_pieces)
+    else:
+        points = np.empty((0,3), dtype=np.float64)
+        edges = np.empty((0,2), dtype=np.int32)
 
     # TODO : get target point separation from segment properties.
     #      : For now, get this from mean edge length.
@@ -181,12 +210,19 @@ def build_boundary_PSLGs(domain, sphere_pieces):
     # add holes
     pslg_holes = add_holes(sphere_pieces)
 
+    # Add points which lie on the boundaries from hole particles
+    added_points = [
+        add_point_plane_intersections(sphere_pieces_holes, i, L)
+        for i in range(3)
+    ]
+
     # Group together segment and perimeter points and edges for each axis
     boundary_pslgs = []
     for i in range(3):
         pslg_points = np.vstack((
             points_pieces[i][:,((i+1)%3,(i+2)%3)],
-            np.vstack(perim_refined[i])[:,(1,2)]
+            np.vstack(perim_refined[i])[:,(1,2)],
+            added_points[i][:,((i+1)%3,(i+2)%3)]
         ))
         pslg_edges = np.vstack((edges_ax[i], np.vstack(perim_edges[i])))
         boundary_pslgs.append((pslg_points, pslg_edges, pslg_holes[i]))
@@ -210,7 +246,6 @@ def triangulate_PSLGs(pslgs, area_constraints):
             iy = int(cy * inv_dy)
             target_area = target_area_grid[ix][iy]
             return int(area > target_area)  # True -> 1 means refine
-
 
         # Set mesh info for triangulation
         mesh_data = triangle.MeshInfo()
