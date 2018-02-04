@@ -293,9 +293,9 @@ class SpherePiece(object):
 
 
 def splitsphere(domain, particles, config):
-    particle = particles[0]
-    sphere = Sphere(particle[0], particle[1:4], particle[4])
-    sphere_pieces = sphere.split(domain)
+    sphere_pieces = []
+    for p in particles:
+        sphere_pieces += Sphere(p[0], p[1:4], p[4]).split(domain)
     for sphere_piece in sphere_pieces:
         sphere_piece.construct()
     return sphere_pieces

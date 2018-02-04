@@ -169,6 +169,8 @@ def read_particle_file(pfile):
             raise ParticleFileReaderError(
                 'No particles specified in particle data file.'
             ) from e
+        if particles.ndim == 1:
+            particles = particles[np.newaxis,:]
         try:
             assert particles.shape[1] == 5
         except AssertionError as e:
