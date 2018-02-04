@@ -199,6 +199,7 @@ def read_config_file(cfile):
         'tetgen_min_angle': 18.,
         'tetgen_max_volume': 1.0e-05,
         'surf_mesh_factor': 1.0e-01,
+        'segment_length': 1.0e-04,
     }
     if cfile:
         with cfile as f:

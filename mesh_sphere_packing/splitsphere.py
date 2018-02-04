@@ -55,7 +55,9 @@ class Sphere(object):
         self.r = r
         self.points = None
 
-    def initialise_points(self, num_points=200):
+    def initialise_points(self, ds):
+        self.ds = ds
+        num_points = int(4. * np.pi * self.r**2 / ds**2)
         self.gen_spiral_points(num_points=num_points)
         self.filter_points()
         self.min = self.points.min(axis=0)
@@ -173,11 +175,8 @@ class Sphere(object):
 
         self.domain = domain
 
-        if not self.points:
+        if self.points is None:
             self.initialise_points()
-
-        # Inverse of point density per unit length (required distance between points).
-        ds = (len(self.points) / (4. * np.pi * self.r**2.))**-0.5
 
         self.split_axis = np.full(3, False)  # True if the particle is split along axis
         self.bound_high = np.full(3, False)  # True/false if particle crosses low/high bound
@@ -225,7 +224,7 @@ class Sphere(object):
 
                 # Add points to intersection curve
                 for phi1, phi2 in zip(phi[:-1], phi[1:]):
-                    add_points = get_add_phi_points(phi1, phi2, r, c, i, ds)
+                    add_points = get_add_phi_points(phi1, phi2, r, c, i, self.ds)
                     z1, z2 = iloop_zones(add_points, i, self.domain.L)
                     sphere_pieces[zone_map[z1]] = np.vstack((
                         sphere_pieces[zone_map[z1]], add_points
@@ -295,7 +294,9 @@ class SpherePiece(object):
 def splitsphere(domain, particles, config):
     sphere_pieces = []
     for p in particles:
-        sphere_pieces += Sphere(p[0], p[1:4], p[4]).split(domain)
+        sphere = Sphere(p[0], p[1:4], p[4])
+        sphere.initialise_points(config.segment_length)
+        sphere_pieces += sphere.split(domain)
     for sphere_piece in sphere_pieces:
         sphere_piece.construct()
     return sphere_pieces

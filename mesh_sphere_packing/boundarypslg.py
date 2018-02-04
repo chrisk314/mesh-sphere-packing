@@ -13,7 +13,7 @@ WITH_PBC = True
 #      : of a sphere surface. This is confusing...
 
 
-def build_boundary_PSLGs(domain, sphere_pieces):
+def build_boundary_PSLGs(domain, sphere_pieces, ds):
     # TODO : Break up this function a bit.
 
     def compile_points_edges(sphere_pieces):
@@ -36,7 +36,7 @@ def build_boundary_PSLGs(domain, sphere_pieces):
             all_edges.append(edges)
         return np.vstack(all_points), np.vstack(all_edges)
 
-    def refined_perimeter(perim, axis):
+    def refined_perimeter(perim, axis, ds):
 
         def filter_colocated_points(perim, axis):
             delta = np.diff(perim[:,axis])
@@ -137,10 +137,6 @@ def build_boundary_PSLGs(domain, sphere_pieces):
         points = np.empty((0,3), dtype=np.float64)
         edges = np.empty((0,2), dtype=np.int32)
 
-    # TODO : get target point separation from segment properties.
-    #      : For now, get this from mean edge length.
-    ds = np.mean(npl.norm(points[edges[:,0]] - points[edges[:,1]], axis=1))
-
     # Get edges and points on each boundary
     edges_ax = [
         edges[np.all(np.isclose(points[edges,i], 0.), axis=1)]
@@ -187,7 +183,7 @@ def build_boundary_PSLGs(domain, sphere_pieces):
                     + translate
                 perim[i][j] = np.vstack((perim[i][j], translated_points))
             perim[i][j] = perim[i][j][perim[i][j][:, axis].argsort()]
-            perim_refined[i][j] = refined_perimeter(perim[i][j], axis)
+            perim_refined[i][j] = refined_perimeter(perim[i][j], axis, ds)
             if WITH_PBC:
                 perim[i][j+2] = perim[i][j] - translate
                 perim_refined[i][j+2] = perim_refined[i][j] - translate
@@ -278,13 +274,9 @@ def triangulate_PSLGs(pslgs, area_constraints):
 
 
 def boundarypslg(domain, particles, sphere_pieces, config):
-    boundary_pslgs = build_boundary_PSLGs(domain, sphere_pieces)
+    ds = config.segment_length
 
-    # TODO : set max_volume based on geometry
-    points, edges, _ = boundary_pslgs[0]
-    ds = np.mean(npl.norm(points[edges[:,0]] - points[edges[:,1]], axis=1))
-
-    # TODO : rather than passing ds this should be available in some class.
+    boundary_pslgs = build_boundary_PSLGs(domain, sphere_pieces, ds)
     area_constraints = AreaConstraints(domain, particles, ds)
 
     return triangulate_PSLGs(boundary_pslgs, area_constraints)
