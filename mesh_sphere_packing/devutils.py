@@ -195,3 +195,11 @@ def rfunc(vertices, area):
     iy = int(cy * inv_dy)
     target_area = TARGET_AREA_GRID[ix][iy]
     return int(area > target_area)  # True -> 1 means refine
+
+def contour_plot(x, y, z):
+    import matplotlib.pyplot as plt
+    plt.figure()
+    CS = plt.contour(x, y, z)
+    plt.clabel(CS, inline=1, fontsize=10)
+    plt.show()
+
