@@ -28,7 +28,7 @@ class AreaConstraints(object):
         axis without actually crossing it.
         """
         close_lower = particles[:,axis] - particles[:,3] < self.cutoff
-        close_upper = particles[:,axis] - particles[:,3] > self.L[axis] - self.cutoff
+        close_upper = particles[:,axis] + particles[:,3] > self.L[axis] - self.cutoff
 
         # Make sure we don't include same particle twice (an unlikely scenario)
         close_upper = close_upper ^ (close_upper & close_lower)
@@ -87,6 +87,7 @@ class AreaConstraints(object):
 
         rad = self.particles[axis][:,3]
         elevation = self.particles[axis][:,axis] - rad
+        elevation = np.where(elevation < 0., 0., elevation)
         p_xy = self.particles[axis][:,((axis+1)%3,(axis+2)%3)]
 
         return [
