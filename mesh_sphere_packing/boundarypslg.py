@@ -6,8 +6,6 @@ from meshpy import triangle
 from mesh_sphere_packing import ONE_THIRD, GROWTH_LIMIT
 from mesh_sphere_packing.area_constraints import AreaConstraints
 
-WITH_PBC = True
-
 # TODO : change nomenclature. Segment is used in geometry to refer to an
 #      : edge connecting two points. Here segment is used to refer to part
 #      : of a sphere surface. This is confusing...
@@ -174,12 +172,14 @@ def build_boundary_PSLGs(domain, sphere_pieces, ds):
         points_on_perim[2] = np.isclose(points_pieces[i][:, 2], L[2])
         points_on_perim[3] = np.isclose(points_pieces[i][:, 1], 0.)
 
-        for j in range(2 + 2 * int(not WITH_PBC)):
+        for j in range(4):
             axis = 1 + j % 2
+            if PBC[axis] and j >= 2:
+                continue
             perim[i][j] = np.vstack(
                 (corners[perim_segs[j]], points_pieces[i][points_on_perim[j]])
             )
-            if WITH_PBC:
+            if PBC[axis]:
                 translate = np.array([0., 0., -L[2]]) if axis == 1\
                     else np.array([0., L[1], 0.])
                 translated_points = points_pieces[i][points_on_perim[j + 2]]\
@@ -187,8 +187,7 @@ def build_boundary_PSLGs(domain, sphere_pieces, ds):
                 perim[i][j] = np.vstack((perim[i][j], translated_points))
             perim[i][j] = perim[i][j][perim[i][j][:, axis].argsort()]
             perim_refined[i][j] = refined_perimeter(perim[i][j], axis, ds)
-            if WITH_PBC:
-                perim[i][j+2] = perim[i][j] - translate
+            if PBC[axis]:
                 perim_refined[i][j+2] = perim_refined[i][j] - translate
 
         # Add the corner points so that duplicate coners can be filtered out
