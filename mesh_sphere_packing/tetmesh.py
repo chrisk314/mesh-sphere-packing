@@ -52,6 +52,22 @@ def build_hole_list(sphere_pieces):
     return np.vstack(all_holes)
 
 
+def write_tetmesh_poly(fname, points, facets, markers, holes):
+    with open(fname, 'w') as f:
+        f.write('%d 3 0 1\n' % len(points))
+        for i, p in enumerate(points):
+            f.write('%5d %+1.15e %+1.15e %+1.15e\n' % (i, p[0], p[1], p[2]))
+        f.write('%d 1\n' % len(facets))
+        for i, (fac, m) in enumerate(zip(facets, markers)):
+            f.write('1 0 %d\n%d %d %d %d\n' % (m, 3, fac[0], fac[1], fac[2]))
+        if len(holes):
+            f.write('%d\n' % len(holes))
+            for i, h in enumerate(holes):
+                f.write('%5d %+1.15e %+1.15e %+1.15e\n' % (i, h[0], h[1], h[2]))
+        else:
+            f.write('0\n')
+
+
 def build_tetmesh(domain, sphere_pieces, boundaries, config):
 
     boundaries = duplicate_lower_boundaries(boundaries, domain.L)
@@ -68,15 +84,13 @@ def build_tetmesh(domain, sphere_pieces, boundaries, config):
     min_angle = config.tetgen_min_angle
     max_volume = None  # 0.00001
 
-    # TODO : Don't mix and match between setting options with argument string
-    #      : and option class attributes. Pick one and be consistent.
-    options = tet.Options('pq{}/{}Y'.format(rad_edge, min_angle))
-    options.docheck = 1
-    options.verbose = 1
+    options = tet.Options('pq{}/{}YCV'.format(rad_edge, min_angle))
 
     mesh = tet.MeshInfo()
     mesh.set_points(points)
     mesh.set_facets(facets.tolist(), markers=markers.tolist())
     mesh.set_holes(holes)
+
+    write_tetmesh_poly('mesh.poly', points, facets, markers, holes)
 
     return tet.build(mesh, options=options, max_volume=max_volume)
