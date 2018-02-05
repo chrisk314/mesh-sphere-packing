@@ -10,16 +10,14 @@ class AreaConstraints(object):
     """Constructs grid of area constraints for triangulation of domain boundaries.
     """
 
-    cutoff = 0.3        # Distance beyond which particles do not force added points
+    cutoff_factor = 5.  # Cutoff distance in units of characteristic length, ds
     cell_width = 1.     # Width of grid cells in units of characteristic length, ds
 
     def __init__(self, domain, particles, ds):
-        # TODO : cutoff distance is dependent on mesh resolution and should exist
-        #      : as part of state in some as yet to be implemented class. Same applies
-        #      : to the domain dimensions.
         self.ds = ds
         self.dA = ds**2
         self.dA_max = self.dA * GROWTH_LIMIT
+        self.cutoff = self.cutoff_factor * self.ds
         self.L = domain.L
         self.particles = particles[:,1:]
         self.inv_dx, self.inv_dy = 3 * [None], 3 * [None]
