@@ -109,7 +109,7 @@ class Sphere(object):
                 out = points[:, axis] < 0.
                 trans_out[axis] = 1.
             elif self.max[axis] > self.domain.L[axis]:
-                out = self.points[:, axis] > self.domain.L
+                out = self.points[:, axis] > self.domain.L[axis]
                 trans_out[axis] = -1.
                 self.bound_high[axis] = True
             if axis < 2:
@@ -150,7 +150,7 @@ class Sphere(object):
                 ci_points[cnt,i2] = c[i2] + di2
                 ci_points[cnt+1,i2] = c[i2] - di2
                 cnt += 2
-            return ci_points[:cnt]
+            return ci_points[:cnt] - c
 
         def get_add_phi_points(phi1, phi2, r, cx, i, ds):
             i1, i2 = (i+1)%3, (i+2)%3

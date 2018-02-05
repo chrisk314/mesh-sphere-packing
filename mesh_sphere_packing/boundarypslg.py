@@ -152,12 +152,15 @@ def build_boundary_PSLGs(domain, sphere_pieces, ds):
     points_pieces, edges_ax = [list(x) for x in zip(*[
         reindex_edges(points, points_ax[i], edges_ax[i]) for i in range(3)
     ])]
-    perim = perim_refined = 3 * [4 * [None]]
+    perim = []
+    perim_refined = []
     perim_segs = np.array([[0, 1], [1, 2], [2, 3], [3, 0]])
 
     perim_edges = []
 
     for i in range(3):
+        perim.append(4 * [None])
+        perim_refined.append(4 * [None])
         # Rotate coordinate system by cyclic permutation of axes
         points_pieces[i][:,(0,1,2)] = points_pieces[i][:,(i,(i+1)%3,(i+2)%3)]
 
@@ -240,7 +243,7 @@ def triangulate_PSLGs(pslgs, area_constraints):
             cy = ONE_THIRD * (oy + dy + ay)  # Triangle center y coord.
             ix = int(cx * inv_dx)
             iy = int(cy * inv_dy)
-            target_area = target_area_grid[ix][iy]
+            target_area = target_area_grid[iy][ix]
             return int(area > target_area)  # True -> 1 means refine
 
         # Set mesh info for triangulation
