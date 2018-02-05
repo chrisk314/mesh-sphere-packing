@@ -27,8 +27,9 @@ class AreaConstraints(object):
         """Return particles which are close to the boundary along specified
         axis without actually crossing it.
         """
-        close_lower = particles[:,axis] - particles[:,3] < self.cutoff
-        close_upper = particles[:,axis] + particles[:,3] > self.L[axis] - self.cutoff
+        r = particles[:,3]
+        close_lower = particles[:,axis] - r < self.cutoff
+        close_upper = particles[:,axis] + r > self.L[axis] - self.cutoff
 
         # Make sure we don't include same particle twice (an unlikely scenario)
         close_upper = close_upper ^ (close_upper & close_lower)
@@ -50,9 +51,45 @@ class AreaConstraints(object):
         return particles_upper
 
     def duplicate_edge_particles(self, particles, axis):
-        # TODO : Need to duplicate particles which cross a boundary perpendicular
-        #      : to axis as they will have geometry at both sides of domain.
-        return particles
+        i1, i2 = (axis+1)%3, (axis+2)%3
+
+        r = particles[:,3]
+
+        close_i1_lower = particles[:,i1] - r < self.cutoff
+        close_i1_upper = particles[:,i1] + r > self.L[i1] - self.cutoff
+
+        close_i2_lower = particles[:,i2] - r < self.cutoff
+        close_i2_upper = particles[:,i2] + r > self.L[i2] - self.cutoff
+
+        p_close_i1_lower = particles[close_i1_lower]
+        p_close_i1_lower[:,i1] += self.L[i1]
+        p_close_i1_upper = particles[close_i1_upper]
+        p_close_i1_upper[:,i1] -= self.L[i1]
+
+        p_close_i2_lower = particles[close_i2_lower]
+        p_close_i2_lower[:,i2] += self.L[i2]
+        p_close_i2_upper = particles[close_i2_upper]
+        p_close_i2_upper[:,i2] -= self.L[i2]
+
+        p_close_i1l_i2l = particles[close_i1_lower & close_i2_lower]
+        p_close_i1l_i2l[:,i1] += self.L[i1]
+        p_close_i1l_i2l[:,i2] += self.L[i2]
+        p_close_i1l_i2u = particles[close_i1_lower & close_i2_upper]
+        p_close_i1l_i2u[:,i1] += self.L[i1]
+        p_close_i1l_i2u[:,i2] -= self.L[i2]
+        p_close_i1u_i2l = particles[close_i1_upper & close_i2_lower]
+        p_close_i1u_i2l[:,i1] -= self.L[i1]
+        p_close_i1u_i2l[:,i2] += self.L[i2]
+        p_close_i1u_i2u = particles[close_i1_upper & close_i2_upper]
+        p_close_i1u_i2u[:,i1] -= self.L[i1]
+        p_close_i1u_i2u[:,i2] -= self.L[i2]
+
+        return np.vstack((
+            particles,
+            p_close_i1_lower, p_close_i1_upper,
+            p_close_i2_lower, p_close_i2_upper,
+            p_close_i1l_i2l, p_close_i1l_i2u, p_close_i1u_i2l, p_close_i1u_i2u,
+        ))
 
     def area_constraint(self, x, y, p_xy, elevation, rad):
         """Return value for area constraint factor at coordinates x, y based
