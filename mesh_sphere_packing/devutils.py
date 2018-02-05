@@ -70,6 +70,7 @@ def plot_points_edges(points, edges):
     plt.xlim(points[:,0].min() - space, points[:,0].max() + space)
     plt.ylim(points[:,1].min() - space, points[:,1].max() + space)
     plt.plot(points[:,0], points[:,1], 'ro')
+    plt.axes().set_aspect('equal', 'datalim')
     fig.savefig('points_edges.png')
     plt.show()
 
