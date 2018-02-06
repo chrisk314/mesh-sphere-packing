@@ -15,7 +15,7 @@ class AreaConstraints(object):
 
     def __init__(self, domain, particles, ds):
         self.ds = ds
-        self.dA = ds**2
+        self.dA = 0.5 * ds**2
         self.dA_max = self.dA * GROWTH_LIMIT
         self.cutoff = self.cutoff_factor * self.ds
         self.L = domain.L
@@ -106,7 +106,6 @@ class AreaConstraints(object):
         else:
             # TODO : This requires some tuning to get the desired refinement.
             g_min_part = 1. + (elevation / self.cutoff)**2. * (GROWTH_LIMIT - 1.)
-            g_min_part *= 0.8
             decay = (delta / rad)**2.5
             growth = np.min(g_min_part * (1. - decay) + GROWTH_LIMIT * decay)
         return growth * self.dA
