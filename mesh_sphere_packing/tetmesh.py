@@ -1,9 +1,50 @@
 
+from contextlib import contextmanager
+
 import numpy as np
 from numpy import linalg as npl
 from meshpy import tet
 
 from mesh_sphere_packing import logger
+
+
+@contextmanager
+def redirect_tetgen_output(fname='./tet.log'):
+    import ctypes, io, os, sys
+
+    libc = ctypes.CDLL(None)
+    c_stdout = ctypes.c_void_p.in_dll(libc, 'stdout')
+
+    def _redirect_stdout(to_fd):
+        libc.fflush(c_stdout)
+        sys.stdout.close()
+        os.dup2(to_fd, original_stdout_fd)
+        sys.stdout = io.TextIOWrapper(os.fdopen(original_stdout_fd, 'wb'))
+
+    def extract_stats(f):
+        while True:
+            l = f.readline()
+            if 'Statistics:' in l.decode('ascii'):
+                stats = [f.readline().decode('ascii') for i in range(11)]
+                npoints, ntets, nfaces, nedges = [
+                    int(sl.split()[-1]) for sl in stats[7:]
+                ]
+                return 'Built mesh with {} points, {} tetrahedra, {} faces, and {} edges'\
+                    .format(npoints, ntets, nfaces, nedges)
+
+    original_stdout_fd = sys.stdout.fileno()
+    saved_stdout_fd = os.dup(original_stdout_fd)
+    try:
+        tfile = open(fname, mode='w+b')
+        _redirect_stdout(tfile.fileno())
+        yield
+        _redirect_stdout(saved_stdout_fd)
+        tfile.seek(0, io.SEEK_SET)
+        logger.info(extract_stats(tfile))
+        tfile.close()
+    finally:
+        tfile.close()
+        os.close(saved_stdout_fd)
 
 
 def write_poly(fname, mesh):
@@ -158,6 +199,7 @@ def build_tetmesh(domain, sphere_pieces, boundaries, config):
     mesh.set_facets(facets.tolist(), markers=markers.tolist())
     mesh.set_holes(holes)
 
-    return tet.build(
-        mesh, options=options, verbose=True, max_volume=max_volume
-    )
+    with redirect_tetgen_output():
+        return tet.build(
+            mesh, options=options, verbose=True, max_volume=max_volume
+        )

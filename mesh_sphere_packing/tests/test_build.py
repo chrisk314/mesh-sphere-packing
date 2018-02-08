@@ -1,5 +1,5 @@
 
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import numpy as np
 
@@ -21,5 +21,6 @@ config = Mock(
 )
 
 
-def test_build():
+@patch('mesh_sphere_packing.tetmesh.redirect_tetgen_output', autospec=True)
+def test_build(patch):
     build(domain, particles, config)
