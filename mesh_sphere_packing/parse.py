@@ -114,8 +114,10 @@ def load_data(args):
     if particle_file:
         if isinstance(particle_file, str):
             particle_file = open(particle_file, 'r')
-        L, PBC, particles = read_particle_file(particle_file)
-        particle_file.close()
+        try:
+            L, PBC, particles = read_particle_file(particle_file)
+        finally:
+            particle_file.close()
     else:
         single_mode_missing_required = [
             not args.particle_center,
