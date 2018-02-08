@@ -4,7 +4,7 @@ from numpy import linalg as npl
 from numpy import random as npr
 from scipy.spatial.qhull import ConvexHull
 
-from mesh_sphere_packing import TOL, ONE_THIRD
+from mesh_sphere_packing import logger, TOL, ONE_THIRD
 
 
 def flatten(l):
@@ -292,6 +292,7 @@ class SpherePiece(object):
 
 
 def splitsphere(domain, particles, config):
+    logger.info('Splitting input particles')
     sphere_pieces = []
     for p in particles:
         sphere = Sphere(p[0], p[1:4], p[4])

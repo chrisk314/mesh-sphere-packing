@@ -3,6 +3,8 @@ import numpy as np
 from numpy import linalg as npl
 from meshpy import tet
 
+from mesh_sphere_packing import logger
+
 
 def write_poly(fname, mesh):
     points, faces, markers, holes = list(mesh.points), list(mesh.faces),\
@@ -132,6 +134,7 @@ def build_hole_list(sphere_pieces):
 
 
 def build_tetmesh(domain, sphere_pieces, boundaries, config):
+    logger.info('Building tetrahedral mesh')
 
     boundaries = duplicate_lower_boundaries(boundaries, domain.L)
 
