@@ -112,7 +112,10 @@ def load_data(args):
     config = read_config_file(args.config_file)
     particle_file = args.particle_file or config.particle_file
     if particle_file:
+        if isinstance(particle_file, str):
+            particle_file = open(particle_file, 'r')
         L, PBC, particles = read_particle_file(particle_file)
+        particle_file.close()
     else:
         single_mode_missing_required = [
             not args.particle_center,
@@ -217,8 +220,8 @@ def read_config_file(cfile):
         'tetgen_rad_edge_ratio': 1.4,
         'tetgen_min_angle': 18.,
         'tetgen_max_volume': 1.0e-05,
-        'surf_mesh_factor': 1.0e-01,
         'segment_length': 1.0e-04,
+        'output_format': ['vtk', 'poly', 'off']
     }
     if cfile:
         with cfile as f:

@@ -5,11 +5,22 @@ from mesh_sphere_packing.boundarypslg import boundarypslg
 from mesh_sphere_packing.tetmesh import build_tetmesh
 
 
+def output_mesh(mesh, config):
+    if 'vtk' in config.output_format:
+        mesh.write_vtk('mesh.vtk')
+    if 'poly' in config.output_format:
+        from mesh_sphere_packing.tetmesh import write_poly
+        write_poly('mesh.poly', mesh)
+    if 'multiflow' in config.output_format:
+        from mesh_sphere_packing.tetmesh import write_multiflow
+        write_multiflow('mesh.h5', mesh)
+
+
 def build(domain, particles, config):
     sphere_pieces = splitsphere(domain, particles, config)
     boundaries = boundarypslg(domain, particles, sphere_pieces, config)
     mesh = build_tetmesh(domain, sphere_pieces, boundaries, config)
-    mesh.write_vtk('mesh.vtk')
+    output_mesh(mesh, config)
 
 
 if __name__ == '__main__':

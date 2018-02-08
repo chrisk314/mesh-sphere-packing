@@ -4,6 +4,85 @@ from numpy import linalg as npl
 from meshpy import tet
 
 
+def write_poly(fname, mesh):
+    points, faces, markers, holes = list(mesh.points), list(mesh.faces),\
+        list(mesh.face_markers), list(mesh.holes)
+    with open(fname, 'w') as f:
+        f.write('%d 3 0 1\n' % len(points))
+        for i, p in enumerate(points):
+            f.write('%5d %+1.15e %+1.15e %+1.15e\n' % (i, p[0], p[1], p[2]))
+        f.write('%d 1\n' % len(faces))
+        for i, (fac, m) in enumerate(zip(faces, markers)):
+            f.write('1 0 %d\n%d %d %d %d\n' % (m, 3, fac[0], fac[1], fac[2]))
+        if len(holes):
+            f.write('%d\n' % len(holes))
+            for i, h in enumerate(holes):
+                f.write('%5d %+1.15e %+1.15e %+1.15e\n' % (i, h[0], h[1], h[2]))
+        else:
+            f.write('0\n')
+
+
+def write_multiflow(fname, mesh):
+    from collections import defaultdict
+    import h5py as h5
+
+    points, elements, faces, markers, neighbours, adjacent_elements =\
+        np.array(mesh.points), np.array(mesh.elements), np.array(mesh.faces),\
+        np.array(mesh.face_markers), np.array(mesh.neighbors),\
+        np.array(mesh.adjacent_elements)
+
+    with h5.File(fname, 'w') as f:
+        # Write node data.
+        f['nodes'] = points.flatten()
+
+        # Write cell data.
+        cell_type = np.full((len(elements),1), 6)
+        f['cells'] = np.hstack((cell_type, elements)).flatten()
+        f['cellNodePtr'] = np.append([0], np.full(len(elements), 4).cumsum())
+
+        # Write face data
+        f['faces'] = faces.flatten()
+        f['faceNodePtr'] = np.append([0], np.full(len(faces), 3).cumsum())
+
+        # Write cell face connectivity data
+        cell_faces = defaultdict(list)
+        for idx, adj in enumerate(adjacent_elements):
+            cell_faces[adj[0]].append(idx)
+            cell_faces[adj[1]].append(idx)
+        cell_faces.pop(-1)
+        f['cellFaces'] = np.array(
+            [item[1] for item in sorted(cell_faces.items(), key=lambda x: x[0])]
+        ).flatten()
+
+        f['cellFacePtr'] = np.append([0], np.full(len(elements), 4).cumsum())
+
+        # Write cell neighbour data
+        cell_nbr = neighbours[neighbours > -1]
+        f['cellNeighbours'] = cell_nbr
+
+        cell_nbr_ptr = np.empty(len(elements)+1, dtype=np.int32)
+        cell_nbr_ptr[0] = 0
+        cell_nbr_ptr[1:] = np.apply_along_axis(
+            lambda x: np.where(x > -1)[0].shape[0], 1, neighbours
+        ).cumsum()
+        f['cellNeighbourPtr'] = cell_nbr_ptr
+
+        # Write boundary marker data
+        f['boundaryType'] = markers
+
+        # Write header data.
+        f['meshData'] = np.array([
+            len(points),
+            len(elements),
+            len(faces),
+            8,
+            4 * len(elements),
+            3 * len(faces),
+            4 * len(elements),
+            cell_nbr_ptr[-1]
+        ])
+
+
 def duplicate_lower_boundaries(lower_boundaries, L):
     upper_boundaries = []
     for i, (points, tris, holes) in enumerate(lower_boundaries):
@@ -52,27 +131,12 @@ def build_hole_list(sphere_pieces):
     return np.vstack(all_holes)
 
 
-def write_tetmesh_poly(fname, points, facets, markers, holes):
-    with open(fname, 'w') as f:
-        f.write('%d 3 0 1\n' % len(points))
-        for i, p in enumerate(points):
-            f.write('%5d %+1.15e %+1.15e %+1.15e\n' % (i, p[0], p[1], p[2]))
-        f.write('%d 1\n' % len(facets))
-        for i, (fac, m) in enumerate(zip(facets, markers)):
-            f.write('1 0 %d\n%d %d %d %d\n' % (m, 3, fac[0], fac[1], fac[2]))
-        if len(holes):
-            f.write('%d\n' % len(holes))
-            for i, h in enumerate(holes):
-                f.write('%5d %+1.15e %+1.15e %+1.15e\n' % (i, h[0], h[1], h[2]))
-        else:
-            f.write('0\n')
-
-
 def build_tetmesh(domain, sphere_pieces, boundaries, config):
 
     boundaries = duplicate_lower_boundaries(boundaries, domain.L)
 
     points = build_point_list(sphere_pieces, boundaries)
+
     # Fix boundary points to exactly zero
     for i in range(3):
         points[(np.isclose(points[:,i], 0.), i)] = 0.
@@ -82,15 +146,13 @@ def build_tetmesh(domain, sphere_pieces, boundaries, config):
 
     rad_edge = config.tetgen_rad_edge_ratio
     min_angle = config.tetgen_min_angle
-    max_volume = None  # 0.00001
+    max_volume = config.tetgen_max_volume
 
-    options = tet.Options('pq{}/{}YCV'.format(rad_edge, min_angle))
+    options = tet.Options('pq{}/{}nzfennYCV'.format(rad_edge, min_angle))
 
     mesh = tet.MeshInfo()
     mesh.set_points(points)
     mesh.set_facets(facets.tolist(), markers=markers.tolist())
     mesh.set_holes(holes)
-
-    write_tetmesh_poly('mesh.poly', points, facets, markers, holes)
 
     return tet.build(mesh, options=options, max_volume=max_volume)
