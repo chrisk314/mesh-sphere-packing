@@ -149,10 +149,13 @@ def build_tetmesh(domain, sphere_pieces, boundaries, config):
     max_volume = config.tetgen_max_volume
 
     options = tet.Options('pq{}/{}nzfennYCV'.format(rad_edge, min_angle))
+    options.quiet = False
 
     mesh = tet.MeshInfo()
     mesh.set_points(points)
     mesh.set_facets(facets.tolist(), markers=markers.tolist())
     mesh.set_holes(holes)
 
-    return tet.build(mesh, options=options, max_volume=max_volume)
+    return tet.build(
+        mesh, options=options, verbose=True, max_volume=max_volume
+    )
