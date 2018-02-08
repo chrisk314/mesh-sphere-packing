@@ -111,9 +111,9 @@ def build_point_list(sphere_pieces, boundaries):
 def build_facet_list(sphere_pieces, boundaries):
     all_facets = [tris for _, tris, _ in boundaries]
     all_markers = [
-        np.full(len(all_facets[0]), 1), np.full(len(all_facets[3]), 2),
-        np.full(len(all_facets[1]), 3), np.full(len(all_facets[4]), 4),
-        np.full(len(all_facets[2]), 5), np.full(len(all_facets[5]), 6),
+        np.full(len(all_facets[0]), 1), np.full(len(all_facets[1]), 3),
+        np.full(len(all_facets[2]), 5), np.full(len(all_facets[3]), 2),
+        np.full(len(all_facets[4]), 4), np.full(len(all_facets[5]), 6),
     ]
     fcount = 7
     for tris in [p.tris for p in sphere_pieces]:
