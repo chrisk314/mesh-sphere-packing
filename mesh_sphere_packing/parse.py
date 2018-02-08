@@ -95,7 +95,7 @@ def load_data(args):
     def extend_domain(L, PBC, particles, ds):
         for axis in range(3):
             if not PBC[axis]:
-                pad_extra = 2. * ds
+                pad_extra = 3. * ds
 
                 pad_low = np.min(particles[:,axis+1] - particles[:,4])
                 pad_low -= pad_extra
