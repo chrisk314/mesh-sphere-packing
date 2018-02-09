@@ -148,10 +148,18 @@ def read_particle_file(pfile):
     :returns: tuple consisting of a numpy array of domain dimensions, a numpy
     array of periodic boundary flags, and a numpy array of particle data.
     """
+
+    def _readline(f):
+        """Return next uncommented stripped line from open file ``f``."""
+        while True:
+            l = next(f).strip()
+            if not l.startswith('#'):
+                return l
+
     with pfile as f:
         try:
             L = np.array(
-                [float(tok) for tok in f.readline().strip().split()[:3]]
+                [float(tok) for tok in _readline(f).split()[:3]]
             )
         except Exception as e:
             raise ParticleFileReaderError(
@@ -159,7 +167,7 @@ def read_particle_file(pfile):
             ) from e
         try:
             PBC = np.array(
-                [bool(int(tok)) for tok in f.readline().strip().split()[:3]]
+                [bool(int(tok)) for tok in _readline(f).split()[:3]]
             )
         except Exception as e:
             raise ParticleFileReaderError(
