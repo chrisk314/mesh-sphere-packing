@@ -66,6 +66,10 @@ def write_poly(fname, mesh):
 
 
 def write_multiflow(fname, mesh):
+    # TODO : Necessary to avoid numpy related warnings from h5py (h5py/h5py#961)
+    import warnings
+    warnings.simplefilter('ignore')
+
     from collections import defaultdict
     import h5py as h5
 
