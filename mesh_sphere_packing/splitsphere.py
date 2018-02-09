@@ -11,10 +11,7 @@ def flatten(l):
     """Return flattened list."""
     flat = []
     for x in l:
-        if isinstance(x, list):
-            flat += flatten(x)
-        else:
-            flat += [x]
+        flat += flatten(x) if isinstance(x, list) else [x]
     return flat
 
 
