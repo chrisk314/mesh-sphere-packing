@@ -35,6 +35,46 @@ def reindex_tris(points, tris):
     return points, tris
 
 
+def extend_domain(L, PBC, particles, ds):
+    for axis in range(3):
+        if not PBC[axis]:
+            pad_extra = 3. * ds
+
+            pad_low = np.min(particles[:,axis+1] - particles[:,4])
+            pad_low -= pad_extra
+            pad_low = abs(pad_low) if pad_low < 0. else 0.
+
+            pad_high = np.max(particles[:,axis+1] + particles[:,4]) - L[axis]
+            pad_high += pad_extra
+            pad_high = pad_high if pad_high > 0. else 0.
+
+            L[axis] += pad_low + pad_high
+            particles[:,axis+1] += pad_low
+    return L, particles
+
+
+def duplicate_particles(L, particles, config):
+    if not any(config.duplicate_particles):
+        return particles
+
+    axis = [i for i, v in enumerate(config.duplicate_particles) if v][0]
+
+    idx_dup_lower = np.where(particles[:,axis+1] - particles[:,4] < 0.)
+    idx_dup_upper = np.where(particles[:,axis+1] + particles[:,4] > L[axis])
+
+    trans_dup_lower = np.zeros(3, dtype=np.float64)
+    trans_dup_lower[axis] = L[axis]
+    trans_dup_upper = np.zeros(3, dtype=np.float64)
+    trans_dup_upper[axis] = -1. * L[axis]
+
+    particles_dup_lower = particles[idx_dup_lower]
+    particles_dup_lower[:,(1,2,3)] += trans_dup_lower
+    particles_dup_upper = particles[idx_dup_upper]
+    particles_dup_upper[:,(1,2,3)] += trans_dup_upper
+
+    return np.vstack((particles, particles_dup_lower, particles_dup_upper))
+
+
 class Domain(object):
 
     """Spatial cuboid shaped domain in R^3."""

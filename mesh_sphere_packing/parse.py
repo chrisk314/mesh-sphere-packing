@@ -6,7 +6,8 @@ from collections import namedtuple
 import numpy as np
 import yaml
 
-from mesh_sphere_packing.splitsphere import Domain
+from mesh_sphere_packing.splitsphere import Domain, duplicate_particles,\
+    extend_domain
 
 DESC = """Generates tetrahedral meshes of the interstitial spaces in packings of spheres
 for finite volume simulations.
@@ -91,24 +92,6 @@ def get_parser():
 
 
 def load_data(args):
-
-    def extend_domain(L, PBC, particles, ds):
-        for axis in range(3):
-            if not PBC[axis]:
-                pad_extra = 3. * ds
-
-                pad_low = np.min(particles[:,axis+1] - particles[:,4])
-                pad_low -= pad_extra
-                pad_low = abs(pad_low) if pad_low < 0. else 0.
-
-                pad_high = np.max(particles[:,axis+1] + particles[:,4]) - L[axis]
-                pad_high += pad_extra
-                pad_high = pad_high if pad_high > 0. else 0.
-
-                L[axis] += pad_low + pad_high
-                particles[:,axis+1] += pad_low
-        return L, particles
-
     config = read_config_file(args.config_file)
     particle_file = args.particle_file or config.particle_file
     if particle_file:
@@ -132,6 +115,7 @@ def load_data(args):
         particles = np.array([
             [0] + args.particle_center + [args.particle_radius]
         ])
+    particles = duplicate_particles(L, particles, config)
     L, particles = extend_domain(L, PBC, particles, config.segment_length)
     domain = Domain(L, PBC)
     return domain, particles, config
@@ -223,7 +207,8 @@ def read_config_file(cfile):
         'tetgen_min_angle': 18.,
         'tetgen_max_volume': 1.0e-05,
         'segment_length': 1.0e-04,
-        'output_format': ['vtk', 'poly', 'off']
+        'output_format': ['vtk', 'poly', 'off'],
+        'duplicate_particles': [False, False, False]
     }
     if cfile:
         with cfile as f:
@@ -241,5 +226,11 @@ def read_config_file(cfile):
         # TODO : Should check user options are valid and apply argument type
         #      : conversions.
         config.update(user_config)
+        try:
+            assert sum(config['duplicate_particles']) <= 1
+        except AssertionError as e:
+            raise ConfigFileReaderError(
+                'Only one axis can be specified for particle duplication'
+            ) from e
         config['allow_overlaps'] = bool(config['allow_overlaps'])
     return namedtuple('Config', config.keys())(**config)
