@@ -134,7 +134,7 @@ class Sphere(object):
         self.points = self.points[~close_x & ~close_y & ~close_z]
 
     def split_axis_recursive(self, points, axis, trans):
-        """Return nested list of points sets resulting from recursive splitting
+        """Return nested list of point sets resulting from recursive splitting
         of sphere along the three coordinate axes.
         """
         cross_low = self.min[axis] < 0.
@@ -145,8 +145,8 @@ class Sphere(object):
             if cross_low:
                 out = points[:, axis] < 0.
                 trans_out[axis] = 1.
-            elif self.max[axis] > self.domain.L[axis]:
-                out = self.points[:, axis] > self.domain.L[axis]
+            else:
+                out = points[:, axis] > self.domain.L[axis]
                 trans_out[axis] = -1.
                 self.bound_high[axis] = True
             if axis < 2:
