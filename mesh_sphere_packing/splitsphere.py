@@ -96,7 +96,6 @@ class Sphere(object):
         self.ds = ds
         num_points = int(4. * np.pi * self.r**2 / ds**2)
         self.gen_spiral_points(num_points=num_points)
-        self.filter_points()
         self.min = self.points.min(axis=0)
         self.max = self.points.max(axis=0)
 
@@ -112,43 +111,38 @@ class Sphere(object):
         self.points[:,2] = self.x[2] + self.r * np.cos(phi)
 
     def filter_points(self, strength=0.15):
-        """Return array of filtered points excluding points lying too close
-        to domain boundaries.
-        """
-        # TODO : This is a quick and dirty fix to prevent removal of points
-        #      : for particles which do not cross boundaries. Ultimately these
-        #      : cases needs to be handled in a more generally, comprehensively.
-        out_x = self.points[:, 0] < 0.
-        out_y = self.points[:, 1] < 0.
-        out_z = self.points[:, 2] < 0.
+        """Filter out points lying too close to domain boundaries."""
+        cutoff = strength * self.ds
 
-        if not np.any([out_x, out_y, out_z]):
-            return
+        close_ax = [np.isclose(
+            self.points[:,i], self.bound_high[i] * self.domain.L[i],
+            atol=cutoff, rtol=0.
+        ) for i in range(3)]
 
-        cutoff = strength * (len(self.points) / (4. * np.pi * self.r**2.))**-0.5
+        self.points = self.points[~close_ax[0] & ~close_ax[1] & ~close_ax[2]]
 
-        close_x = np.abs(self.points[:,0]) < cutoff
-        close_y = np.abs(self.points[:,1]) < cutoff
-        close_z = np.abs(self.points[:,2]) < cutoff
-
-        self.points = self.points[~close_x & ~close_y & ~close_z]
+    def set_split_planes(self):
+        self.split_axis = np.full(3, False)  # True if sphere is split along axis
+        self.bound_high = np.full(3, False)  # True/false if crossing high/low bound
+        for axis in range(3):
+            if self.min[axis] < 0.:
+                self.split_axis[axis] = True
+            elif  self.max[axis] > self.domain.L[axis]:
+                self.split_axis[axis] = True
+                self.bound_high[axis] = True
 
     def split_axis_recursive(self, points, axis, trans):
         """Return nested list of point sets resulting from recursive splitting
         of sphere along the three coordinate axes.
         """
-        cross_low = self.min[axis] < 0.
-        cross_high = self.max[axis] > self.domain.L[axis]
-        if cross_low or cross_high:
-            self.split_axis[axis] = True
+        if self.split_axis[axis]:
             trans_in, trans_out = trans.copy(), trans.copy()
-            if cross_low:
-                out = points[:, axis] < 0.
-                trans_out[axis] = 1.
-            else:
+            if self.bound_high[axis]:
                 out = points[:, axis] > self.domain.L[axis]
                 trans_out[axis] = -1.
-                self.bound_high[axis] = True
+            else:
+                out = points[:, axis] < 0.
+                trans_out[axis] = 1.
             if axis < 2:
                 return [
                     self.split_axis_recursive(points[~out], axis+1, trans_in),
@@ -177,9 +171,9 @@ class Sphere(object):
             # Otherwise, if the sphere is split along i1 the curve may cross the bounds.
             elif self.split_axis[i1]:
                 if c[i1] + r > L[i1]:   # Add two points at upper bound along i1...
-                    ci_points[cnt:cnt+1,i1] = L[i1]
+                    ci_points[cnt:cnt+2,i1] = L[i1]
                 elif c[i1] - r < 0.:    # ...or add two points at lower bound along i1...
-                    ci_points[cnt:cnt+1,i1] = 0.
+                    ci_points[cnt:cnt+2,i1] = 0.
                 else:                   # ...or add no points at bounds along i1.
                     return ci_points[:cnt]
                 di1 = ci_points[cnt,i1] - c[i1]
@@ -215,17 +209,18 @@ class Sphere(object):
         if self.points is None:
             self.initialise_points()
 
-        self.split_axis = np.full(3, False)  # True if the particle is split along axis
-        self.bound_high = np.full(3, False)  # True/false if particle crosses low/high bound
+        self.set_split_planes()
+
+        if not np.any(self.split_axis):
+            # No splits so return the entire sphere
+            return [SpherePiece(self, self.points, np.zeros(3), is_hole=True)]
+
+        self.filter_points()
 
         # Partition points of sphere into regions either side of boundaries
         sphere_pieces = flatten([
             self.split_axis_recursive(self.points, 0, np.zeros(3, dtype=np.float64))
         ])
-
-        if not np.any(self.split_axis):
-            # No splits so return the entire sphere
-            return [SpherePiece(self, self.points, np.zeros(3), is_hole=True)]
 
         # Filter out empty pieces
         sphere_pieces = [
@@ -288,8 +283,8 @@ class SpherePiece(object):
         self.sphere = sphere
         self.domain = sphere.domain
         self.trans_flag = trans_flag
-        self.points = points
         self.is_hole = is_hole
+        self.points = points
 
     def construct(self):
         self.triangulate_surface_points()
