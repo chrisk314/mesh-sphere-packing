@@ -82,6 +82,124 @@ class Domain(object):
         self.volume = self.L.prod()
 
 
+class IntersectionPoints(object):
+
+    def __init__(self, i_loop, points):
+        self.i_loop = i_loop
+        self.points = points
+
+    @property
+    def is_full_loop(self):
+        return self.i_loop.is_full_loop
+
+    @property
+    def hole_point(self):
+        return np.mean(self.points, axis=0)
+
+    @property
+    def origin(self):
+        if len(self.i_loop.ci_points) < 2:
+            return self.i_loop.c
+        if len(self.i_loop.ci_points) == 2:
+            return np.mean(self.i_loop.ci_points, axis=0)
+        return self.i_loop.sphere.bound_high * self.i_loop.domain.L
+
+
+class IntersectionLoop(object):
+
+    """Represents the intersection curve between a sphere and a plane."""
+
+    def __init__(self, sphere, domain, axis):
+        self.sphere = sphere
+        self.domain = domain
+        self.i0, self.i1, self.i2 = axis, (axis+1)%3, (axis+2)%3
+
+        self.set_analytical_curve()
+        self.set_axis_intersection_points()
+        self.add_phi_points()
+
+    def set_analytical_curve(self):
+        i0 = self.i0
+        self.c = self.sphere.x.copy()
+        self.c[i0] = self.sphere.bound_high[i0] * self.domain.L[i0]
+        self.r = np.sqrt(self.sphere.r**2 - (self.sphere.x[i0] - self.c[i0])**2)
+
+    def set_axis_intersection_points(self):
+        self.ci_points = np.vstack((
+            self.curve_intersection_points(self.i1, self.i2),
+            self.curve_intersection_points(self.i2, self.i1)
+        ))
+        self.is_full_loop = not bool(len(self.ci_points))
+
+    def curve_intersection_points(self, i1, i2):
+        # Check for splits of this curve along axis i1
+        ci_points = np.full((2,3), self.c[self.i0])
+        cnt = 0
+        # If the curve just touches a bound along i1, add a single point...
+        if np.isclose(self.c[i1] + self.r, self.domain.L[i1]):  # ...on the upper bound...
+            ci_points[cnt,i1] = self.domain.L[i1]
+            ci_points[cnt,i2] = self.c[i2]
+            cnt += 1
+        elif np.isclose(self.c[i1] - self.r, 0.):  # ...or on the lower bound.
+            ci_points[cnt,i1] = 0.
+            ci_points[cnt,i2] = self.c[i2]
+            cnt += 1
+        # Otherwise, if the sphere is split along i1 the curve may cross the bounds.
+        elif self.sphere.split_axis[i1]:
+            # Add two points at upper bound along i1...
+            if self.c[i1] + self.r > self.domain.L[i1]:
+                ci_points[cnt:cnt+2,i1] = self.domain.L[i1]
+            # ...or add two points at lower bound along i1...
+            elif self.c[i1] - self.r < 0.:
+                ci_points[cnt:cnt+2,i1] = 0.
+            # ...or add no points at bounds along i1.
+            else:
+                return ci_points[:cnt]
+            di1 = ci_points[cnt,i1] - self.c[i1]
+            di2 = np.sqrt(self.r**2 - di1**2)
+            ci_points[cnt,i2] = self.c[i2] + di2
+            ci_points[cnt+1,i2] = self.c[i2] - di2
+            cnt += 2
+        return ci_points[:cnt] - self.c
+
+    def add_phi_points(self):
+        if len(self.ci_points):
+            phi = np.angle(
+                self.ci_points[:,self.i1] + 1j * self.ci_points[:,self.i2]
+            )
+            phi = np.sort(np.where(phi < 0., 2*np.pi+phi, phi))
+            phi = np.append(phi, phi[0] + 2 * np.pi)
+        else:
+            phi = [0., 2. * np.pi]
+        # Add points to intersection curve
+        self.added_points = []
+        for phi1, phi2 in zip(phi[:-1], phi[1:]):
+            add_points = self._add_phi_points(phi1, phi2)
+            self.added_points.append(
+                self.iloop_zones(add_points),
+                IntersectionPoints(self, add_points)
+            )
+
+    def _add_phi_points(self, phi1, phi2):
+        phi_disp = phi2 - phi1
+        n_add = int(np.ceil(phi_disp * self.r / self.sphere.ds))
+        phi = phi1 + (phi_disp / n_add) * np.arange(n_add+1)
+        points = np.empty((len(phi),3))
+        points[:,self.i0] = self.c[self.i0]
+        points[:,self.i1] = self.c[self.i1] + self.r * np.cos(phi)
+        points[:,self.i2] = self.c[self.i2] + self.r * np.sin(phi)
+        return points
+
+    def iloop_zones(self, points):
+        com = points.mean(axis=0)
+        z = ~((0. < com) & (com < self.domain.L))
+        z[self.i0] = False
+        z1 = 1*z[2] + 2*z[1] + 4*z[0]
+        z[self.i0] = True
+        z2 = 1*z[2] + 2*z[1] + 4*z[0]
+        return (z1, z2)
+
+
 class Sphere(object):
 
     """Sphere in R^3 with a unique id."""
@@ -155,55 +273,6 @@ class Sphere(object):
 
     def split(self, domain):
 
-        def curve_intersection_points(c, r, i, i1, i2, L):
-            # Check for splits of this curve along axis i1
-            ci_points = np.full((2,3), c[i])
-            cnt = 0
-            # If the curve just touches a bound along i1 add a single point...
-            if np.isclose(c[i1] + r, L[i1]):    # ...on the upper bound...
-                ci_points[cnt,i1] = L[i1]
-                ci_points[cnt,i2] = c[i2]
-                cnt += 1
-            elif np.isclose(c[i1] - r, 0.):     # ...or on the lower bound.
-                ci_points[cnt,i1] = 0.
-                ci_points[cnt,i2] = c[i2]
-                cnt += 1
-            # Otherwise, if the sphere is split along i1 the curve may cross the bounds.
-            elif self.split_axis[i1]:
-                if c[i1] + r > L[i1]:   # Add two points at upper bound along i1...
-                    ci_points[cnt:cnt+2,i1] = L[i1]
-                elif c[i1] - r < 0.:    # ...or add two points at lower bound along i1...
-                    ci_points[cnt:cnt+2,i1] = 0.
-                else:                   # ...or add no points at bounds along i1.
-                    return ci_points[:cnt]
-                di1 = ci_points[cnt,i1] - c[i1]
-                di2 = np.sqrt(r**2 - di1**2)
-                ci_points[cnt,i2] = c[i2] + di2
-                ci_points[cnt+1,i2] = c[i2] - di2
-                cnt += 2
-            return ci_points[:cnt] - c
-
-        def get_add_phi_points(phi1, phi2, r, cx, i, ds):
-            i1, i2 = (i+1)%3, (i+2)%3
-            phi_disp = phi2 - phi1
-            n_add = int(np.ceil(phi_disp * r / ds))
-            phi = phi1 + (phi_disp / n_add) * np.arange(n_add+1)
-            points = np.empty((len(phi),3))
-            points[:,i] = cx[i]
-            points[:,i1] = cx[i1] + r * np.cos(phi)
-            points[:,i2] = cx[i2] + r * np.sin(phi)
-            return points
-
-        # Construct analytical intersection curves of sphere on boundaries
-        def iloop_zones(points, axis, L):
-            com = points.mean(axis=0)
-            z = ~((0. < com) & (com < L))
-            z[axis] = False
-            z1 = 1*z[2] + 2*z[1] + 4*z[0]
-            z[axis] = True
-            z2 = 1*z[2] + 2*z[1] + 4*z[0]
-            return (z1, z2)
-
         self.domain = domain
 
         if self.points is None:
@@ -213,7 +282,7 @@ class Sphere(object):
 
         if not np.any(self.split_axis):
             # No splits so return the entire sphere
-            return [SpherePiece(self, self.points, np.zeros(3), is_hole=True)]
+            return [SpherePiece(self, self.points, np.zeros(3), [], is_hole=True)]
 
         self.filter_points()
 
@@ -229,85 +298,50 @@ class Sphere(object):
             for idx, t in enumerate(translations)
         }
 
-        ci = []
+        i_loop_points = [[] for sp in sphere_pieces]
+
         for i in range(3):
-            if self.split_axis[i]:
-                i1, i2 = (i+1)%3, (i+2)%3
-                c = self.x.copy()
-                c[i] = self.bound_high[i] * self.domain.L[i]
-                r = np.sqrt(self.r**2 - (self.x[i] - c[i])**2)
+            if not self.split_axis[i]:
+                continue
 
-                ci_points = np.vstack((
-                    curve_intersection_points(c, r, i, i1, i2, domain.L),
-                    curve_intersection_points(c, r, i, i2, i1, domain.L)
-                ))
-                # Sort points by angle 0 -> 2*pi
-                if len(ci_points):
-                    phi = np.angle(ci_points[:,i1] + 1j * ci_points[:,i2])
-                    phi = np.sort(np.where(phi < 0., 2*np.pi+phi, phi))
-                    phi = np.append(phi, phi[0] + 2 * np.pi)
+            ci = IntersectionLoop(self, self.domain, i)
 
-                    # Add points to intersection curve
-                    for phi1, phi2 in zip(phi[:-1], phi[1:]):
-                        add_points = get_add_phi_points(phi1, phi2, r, c, i, self.ds)
-                        z1, z2 = iloop_zones(add_points, i, self.domain.L)
-                        sphere_pieces[zone_map[z1]] = np.vstack((
-                            sphere_pieces[zone_map[z1]], add_points
-                        ))
-                        sphere_pieces[zone_map[z2]] = np.vstack((
-                            sphere_pieces[zone_map[z2]], add_points
-                        ))
-                else:
-                    add_points = get_add_phi_points(0., 2. * np.pi, r, c, i, self.ds)
-                    if len(add_points) < 3:
-                        # Intersection loop so small that only one segment lies on
-                        # the boundary. Replace it with a single point.
-                        add_points = np.mean(add_points, axis=0)
-                        z1, z2 = iloop_zones(add_points, i, self.domain.L)
-                        if len(sphere_pieces[zone_map[z1]]):
-                            # Only one piece will contain points. Add the extra point
-                            # to this piece and leave the other empty.
-                            sphere_pieces[zone_map[z1]] = np.vstack((
-                                sphere_pieces[zone_map[z1]], add_points
-                            ))
-                        else:
-                            sphere_pieces[zone_map[z2]] = np.vstack((
-                                sphere_pieces[zone_map[z2]], add_points
-                            ))
+            if not ci.is_full_loop:
+                for (z1, z2), i_points in ci.added_points:
+                    i_loop_points[zone_map[z1]].append(i_points)
+                    i_loop_points[zone_map[z2]].append(i_points)
+            else:
+                (z1, z2), i_points = ci.added_points[0]
+                if len(add_points) < 3:
+                    # Intersection loop so small that only one segment lies on
+                    # the boundary. Replace it with a single point.
+                    i_points.points = np.mean(i_points.points, axis=0)
+                    if len(sphere_pieces[zone_map[z1]]):
+                        # Only one piece will contain points. Add the extra point
+                        # to this piece and leave the other empty.
+                        i_loop_points[zone_map[z1]].append(i_points)
                     else:
-                        z1, z2 = iloop_zones(add_points, i, self.domain.L)
-                        if not len(sphere_pieces[zone_map[z1]]):
-                            # Open intersection loop on boundary but no points on
-                            # one side. Add an extra point on the sphere surface.
-                            surface_point = self.x.copy()
-                            surface_point[i] += self.r * np.sign(c[i] - self.x[i])
-                            sphere_pieces[zone_map[z1]] = np.vstack((
-                                surface_point, add_points
-                            ))
-                            sphere_pieces[zone_map[z2]] = np.vstack((
-                                sphere_pieces[zone_map[z2]], add_points
-                            ))
-                        elif not len(sphere_pieces[zone_map[z2]]):
-                            # Corresponding check on the opposing piece.
-                            surface_point = self.x.copy()
-                            surface_point[i] += self.r * np.sign(c[i] - self.x[i])
-                            sphere_pieces[zone_map[z2]] = np.vstack((
-                                surface_point, add_points
-                            ))
-                            sphere_pieces[zone_map[z1]] = np.vstack((
-                                sphere_pieces[zone_map[z1]], add_points
-                            ))
-                        else:
-                            sphere_pieces[zone_map[z1]] = np.vstack((
-                                sphere_pieces[zone_map[z1]], add_points
-                            ))
-                            sphere_pieces[zone_map[z2]] = np.vstack((
-                                sphere_pieces[zone_map[z2]], add_points
-                            ))
+                        i_loop_points[zone_map[z2]].append(i_points)
+                else:
+                    if len(sphere_pieces[zone_map[z1]])\
+                            and len(sphere_pieces[zone_map[z2]]):
+                        i_loop_points[zone_map[z1]].append(i_points)
+                        i_loop_points[zone_map[z2]].append(i_points)
+                    else:
+                        if not len(sphere_pieces[zone_map[z2]]):
+                            z1, z2 = z2, z1
+                        # Open intersection loop on boundary but no points on
+                        # one side. Add an extra point on the sphere surface.
+                        surface_point = self.x.copy()
+                        surface_point[i] += self.r * np.sign(ci.c[i] - self.x[i])
+                        sphere_pieces[zone_map[z1]] = surface_point.reshape((1,3))
+                        i_loop_points[zone_map[z1]].append(i_points)
+                        i_loop_points[zone_map[z2]].append(i_points)
 
         return [
-            SpherePiece(self, points, trans)
-            for points, trans in zip(sphere_pieces, translations)
+            SpherePiece(self, points, trans, i_points)
+            for points, trans, i_points
+            in zip(sphere_pieces, translations, i_loop_points)
             if len(points)
         ]
 
@@ -320,7 +354,7 @@ class SpherePiece(object):
     point set in R^3.
     """
 
-    def __init__(self, sphere, points, trans_flag, is_hole=False):
+    def __init__(self, sphere, points, trans_flag, i_points, is_hole=False):
         self.sphere = sphere
         self.domain = sphere.domain
         self.trans_flag = trans_flag
