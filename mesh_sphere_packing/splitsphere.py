@@ -74,7 +74,7 @@ def duplicate_particles(L, particles, config):
 
 class Domain(object):
 
-    """Spatial cuboid shaped domain in R^3."""
+    """Cuboid shaped spatial domain in R^3."""
 
     def __init__(self, L, PBC):
         self.L = np.array(L, dtype=np.float64)
@@ -221,12 +221,8 @@ class Sphere(object):
         sphere_pieces = flatten([
             self.split_axis_recursive(self.points, 0, np.zeros(3, dtype=np.float64))
         ])
-
-        # Filter out empty pieces
-        sphere_pieces = [
-            (points, trans) for (points, trans) in sphere_pieces if len(points)
-        ]
         sphere_pieces, translations = [list(tup) for tup in zip(*sphere_pieces)]
+
         # Construct zone to piece mapping
         zone_map = {
             1*bool(t[2]) + 2*bool(t[1]) + 4*bool(t[0]): idx
@@ -245,29 +241,74 @@ class Sphere(object):
                     curve_intersection_points(c, r, i, i1, i2, domain.L),
                     curve_intersection_points(c, r, i, i2, i1, domain.L)
                 ))
-
                 # Sort points by angle 0 -> 2*pi
                 if len(ci_points):
                     phi = np.angle(ci_points[:,i1] + 1j * ci_points[:,i2])
                     phi = np.sort(np.where(phi < 0., 2*np.pi+phi, phi))
                     phi = np.append(phi, phi[0] + 2 * np.pi)
-                else:
-                    phi = np.array([0., 2 * np.pi])
 
-                # Add points to intersection curve
-                for phi1, phi2 in zip(phi[:-1], phi[1:]):
-                    add_points = get_add_phi_points(phi1, phi2, r, c, i, self.ds)
-                    z1, z2 = iloop_zones(add_points, i, self.domain.L)
-                    sphere_pieces[zone_map[z1]] = np.vstack((
-                        sphere_pieces[zone_map[z1]], add_points
-                    ))
-                    sphere_pieces[zone_map[z2]] = np.vstack((
-                        sphere_pieces[zone_map[z2]], add_points
-                    ))
+                    # Add points to intersection curve
+                    for phi1, phi2 in zip(phi[:-1], phi[1:]):
+                        add_points = get_add_phi_points(phi1, phi2, r, c, i, self.ds)
+                        z1, z2 = iloop_zones(add_points, i, self.domain.L)
+                        sphere_pieces[zone_map[z1]] = np.vstack((
+                            sphere_pieces[zone_map[z1]], add_points
+                        ))
+                        sphere_pieces[zone_map[z2]] = np.vstack((
+                            sphere_pieces[zone_map[z2]], add_points
+                        ))
+                else:
+                    add_points = get_add_phi_points(0., 2. * np.pi, r, c, i, self.ds)
+                    if len(add_points) < 3:
+                        # Intersection loop so small that only one segment lies on
+                        # the boundary. Replace it with a single point.
+                        add_points = np.mean(add_points, axis=0)
+                        z1, z2 = iloop_zones(add_points, i, self.domain.L)
+                        if len(sphere_pieces[zone_map[z1]]):
+                            # Only one piece will contain points. Add the extra point
+                            # to this piece and leave the other empty.
+                            sphere_pieces[zone_map[z1]] = np.vstack((
+                                sphere_pieces[zone_map[z1]], add_points
+                            ))
+                        else:
+                            sphere_pieces[zone_map[z2]] = np.vstack((
+                                sphere_pieces[zone_map[z2]], add_points
+                            ))
+                    else:
+                        z1, z2 = iloop_zones(add_points, i, self.domain.L)
+                        if not len(sphere_pieces[zone_map[z1]]):
+                            # Open intersection loop on boundary but no points on
+                            # one side. Add an extra point on the sphere surface.
+                            surface_point = self.x.copy()
+                            surface_point[i] += self.r * np.sign(c[i] - self.x[i])
+                            sphere_pieces[zone_map[z1]] = np.vstack((
+                                surface_point, add_points
+                            ))
+                            sphere_pieces[zone_map[z2]] = np.vstack((
+                                sphere_pieces[zone_map[z2]], add_points
+                            ))
+                        elif not len(sphere_pieces[zone_map[z2]]):
+                            # Corresponding check on the opposing piece.
+                            surface_point = self.x.copy()
+                            surface_point[i] += self.r * np.sign(c[i] - self.x[i])
+                            sphere_pieces[zone_map[z2]] = np.vstack((
+                                surface_point, add_points
+                            ))
+                            sphere_pieces[zone_map[z1]] = np.vstack((
+                                sphere_pieces[zone_map[z1]], add_points
+                            ))
+                        else:
+                            sphere_pieces[zone_map[z1]] = np.vstack((
+                                sphere_pieces[zone_map[z1]], add_points
+                            ))
+                            sphere_pieces[zone_map[z2]] = np.vstack((
+                                sphere_pieces[zone_map[z2]], add_points
+                            ))
 
         return [
             SpherePiece(self, points, trans)
             for points, trans in zip(sphere_pieces, translations)
+            if len(points)
         ]
 
 
