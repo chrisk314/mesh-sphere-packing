@@ -4,8 +4,9 @@ from contextlib import contextmanager
 import numpy as np
 from numpy import linalg as npl
 from meshpy import tet
+from scipy.spatial import cKDTree
 
-from mesh_sphere_packing import logger
+from mesh_sphere_packing import logger, TOL
 
 
 @contextmanager
@@ -31,6 +32,8 @@ def redirect_tetgen_output(fname='./tet.log'):
                 ]
                 return 'Built mesh with {} points, {} tetrahedra, {} faces, and {} edges'\
                     .format(npoints, ntets, nfaces, nedges)
+
+    logger.info('    -> calling TetGen (writing log to {})'.format(fname))
 
     original_stdout_fd = sys.stdout.fileno()
     saved_stdout_fd = os.dup(original_stdout_fd)
@@ -141,18 +144,71 @@ def duplicate_lower_boundaries(lower_boundaries, L):
     return lower_boundaries + upper_boundaries
 
 
-def build_point_list(sphere_pieces, boundaries):
+def build_point_list(sphere_pieces, boundaries, L):
+    logger.info('    -> building vertex list...')
+
     vcount = 0
-    all_points = []
+    piece_points = []
     for points, tris in [(p.points, p.tris) for p in sphere_pieces]:
-        all_points.append(points)
+        piece_points.append(points)
         tris += vcount
-        vcount += points.shape[0]
+        vcount += len(points)
+    piece_points = np.vstack(piece_points)
+
+    on_x_lower = np.isclose(piece_points[:,0], 0.)
+    on_y_lower = np.isclose(piece_points[:,1], 0.)
+    on_z_lower = np.isclose(piece_points[:,2], 0.)
+    on_x_upper = np.isclose(piece_points[:,0], L[0])
+    on_y_upper = np.isclose(piece_points[:,1], L[1])
+    on_z_upper = np.isclose(piece_points[:,2], L[2])
+
+    bpp_idx = np.where(
+        on_x_lower | on_y_lower | on_z_lower |
+        on_x_upper | on_y_upper | on_z_upper
+    )[0]
+    remap = {child: parent for child, parent in enumerate(bpp_idx)}
+
+    vcount = len(bpp_idx)
+    boundary_points = []
     for points, tris, _ in boundaries:
-        all_points.append(points)
+        boundary_points.append(points)
         tris += vcount
-        vcount += points.shape[0]
-    return np.vstack(all_points)
+        vcount += len(points)
+    boundary_points = np.vstack([piece_points[bpp_idx]] + boundary_points)
+    mask = np.full(len(boundary_points), True)
+
+    # Find duplicated vertices
+    tree = cKDTree(boundary_points)
+    _dup = sorted(tree.query_pairs(TOL), key=lambda x: x[0])
+
+    dup = {}
+    for k, v in _dup:
+        if not v in dup:
+            dup[v] = k
+    del _dup
+
+    # Remove duplicated vertices
+    mask[list(dup.keys())] = False
+    boundary_points = boundary_points[mask]
+
+    # Reindex triangles
+    vcount_bpp = len(bpp_idx)
+    vcount_piece = len(piece_points)
+    remap.update({
+        v + vcount_bpp: v + vcount_piece for v
+        in range(len(boundary_points) - len(bpp_idx))
+    })
+
+    reindex = {old: new for new, old in enumerate(np.where(mask)[0])}
+    reindex.update({k: reindex[v] for k, v in dup.items()})
+    del dup
+
+    for _, tris, _ in boundaries:
+        tris[:] = np.array([
+            remap[reindex[v]] for v in tris.flatten()
+        ]).reshape(tris.shape)
+
+    return np.vstack((piece_points, boundary_points[vcount_bpp:]))
 
 
 def build_facet_list(sphere_pieces, boundaries):
@@ -181,7 +237,7 @@ def build_tetmesh(domain, sphere_pieces, boundaries, config):
 
     boundaries = duplicate_lower_boundaries(boundaries, domain.L)
 
-    points = build_point_list(sphere_pieces, boundaries)
+    points = build_point_list(sphere_pieces, boundaries, domain.L)
 
     # Fix boundary points to exactly zero
     for i in range(3):
