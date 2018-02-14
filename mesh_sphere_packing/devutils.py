@@ -1,10 +1,23 @@
 from __future__ import print_function
 
 import os
+import time
 from pprint import pprint
 
 import numpy as np
 
+def timeit(method):
+
+    def timed(*args, **kw):
+        ts = time.time()
+        result = method(*args, **kw)
+        te = time.time()
+
+        print('%r (%r, %r) %2.2f sec'\
+            % (method.__name__, args, kw, te-ts))
+        return result
+
+    return timed
 
 def write_geomview(points, tris, fname):
     with open(fname, 'w') as f:
@@ -16,9 +29,9 @@ def write_geomview(points, tris, fname):
             f.write('3 %d %d %d\n' % (t[0], t[1], t[2]))
 
 
-def output_segments_geomview(segments):
-    for i, (points, tris) in enumerate(segments):
-        write_geomview(points, tris, './segment_%d.off' % i)
+def output_sphere_pieces_geomview(sphere_pieces):
+    for i, sp in enumerate(sphere_pieces):
+        write_geomview(sp.points, sp.tris, './segment_%d.off' % i)
 
 
 def output_boundaries_geomview(boundaries):
@@ -69,6 +82,8 @@ def plot_points_edges(points, edges):
     space = 0.05 * points.max()
     plt.xlim(points[:,0].min() - space, points[:,0].max() + space)
     plt.ylim(points[:,1].min() - space, points[:,1].max() + space)
+    # plt.xlim(0., 5.e-04)
+    # plt.ylim(0., 1.e-03)
     plt.plot(points[:,0], points[:,1], 'ro')
     plt.axes().set_aspect('equal', 'datalim')
     fig.savefig('points_edges.png')
