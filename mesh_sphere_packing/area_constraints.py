@@ -10,25 +10,26 @@ class AreaConstraints(object):
     """Constructs grid of area constraints for triangulation of domain boundaries.
     """
 
-    cutoff = 0.3        # Distance beyond which particles do not force added points
+    cutoff_factor = 5.  # Cutoff distance in units of characteristic length, ds
     cell_width = 1.     # Width of grid cells in units of characteristic length, ds
 
-    def __init__(self, args, ds):
-        # TODO : cutoff distance is dependent on mesh resolution and should exist
-        #      : as part of state in some as yet to be implemented class. Same applies
-        #      : to the domain dimensions.
+    def __init__(self, domain, particles, ds):
         self.ds = ds
-        self.dA = ds**2
-        self.L = np.array(args.domain_dimensions)
+        self.dA = 0.5 * ds**2
+        self.dA_max = self.dA * GROWTH_LIMIT
+        self.cutoff = self.cutoff_factor * self.ds
+        self.L = domain.L
+        self.particles = particles[:,1:]
         self.inv_dx, self.inv_dy = 3 * [None], 3 * [None]
-        self.build_area_constraint_grid(args)
+        self.build_area_constraint_grid()
 
     def filter_particles(self, particles, axis):
         """Return particles which are close to the boundary along specified
         axis without actually crossing it.
         """
-        close_lower = particles[:,axis] - particles[:,3] < self.cutoff
-        close_upper = particles[:,axis] - particles[:,3] > self.L[axis] - self.cutoff
+        r = particles[:,3]
+        close_lower = particles[:,axis] - r < self.cutoff
+        close_upper = particles[:,axis] + r > self.L[axis] - self.cutoff
 
         # Make sure we don't include same particle twice (an unlikely scenario)
         close_upper = close_upper ^ (close_upper & close_lower)
@@ -50,9 +51,45 @@ class AreaConstraints(object):
         return particles_upper
 
     def duplicate_edge_particles(self, particles, axis):
-        # TODO : Need to duplicate particles which cross a boundary perpendicular
-        #      : to axis as they will have geometry at both sides of domain.
-        return particles
+        i1, i2 = (axis+1)%3, (axis+2)%3
+
+        r = particles[:,3]
+
+        close_i1_lower = particles[:,i1] - r < self.cutoff
+        close_i1_upper = particles[:,i1] + r > self.L[i1] - self.cutoff
+
+        close_i2_lower = particles[:,i2] - r < self.cutoff
+        close_i2_upper = particles[:,i2] + r > self.L[i2] - self.cutoff
+
+        p_close_i1_lower = particles[close_i1_lower]
+        p_close_i1_lower[:,i1] += self.L[i1]
+        p_close_i1_upper = particles[close_i1_upper]
+        p_close_i1_upper[:,i1] -= self.L[i1]
+
+        p_close_i2_lower = particles[close_i2_lower]
+        p_close_i2_lower[:,i2] += self.L[i2]
+        p_close_i2_upper = particles[close_i2_upper]
+        p_close_i2_upper[:,i2] -= self.L[i2]
+
+        p_close_i1l_i2l = particles[close_i1_lower & close_i2_lower]
+        p_close_i1l_i2l[:,i1] += self.L[i1]
+        p_close_i1l_i2l[:,i2] += self.L[i2]
+        p_close_i1l_i2u = particles[close_i1_lower & close_i2_upper]
+        p_close_i1l_i2u[:,i1] += self.L[i1]
+        p_close_i1l_i2u[:,i2] -= self.L[i2]
+        p_close_i1u_i2l = particles[close_i1_upper & close_i2_lower]
+        p_close_i1u_i2l[:,i1] -= self.L[i1]
+        p_close_i1u_i2l[:,i2] += self.L[i2]
+        p_close_i1u_i2u = particles[close_i1_upper & close_i2_upper]
+        p_close_i1u_i2u[:,i1] -= self.L[i1]
+        p_close_i1u_i2u[:,i2] -= self.L[i2]
+
+        return np.vstack((
+            particles,
+            p_close_i1_lower, p_close_i1_upper,
+            p_close_i2_lower, p_close_i2_upper,
+            p_close_i1l_i2l, p_close_i1l_i2u, p_close_i1u_i2l, p_close_i1u_i2u,
+        ))
 
     def area_constraint(self, x, y, p_xy, elevation, rad):
         """Return value for area constraint factor at coordinates x, y based
@@ -69,7 +106,6 @@ class AreaConstraints(object):
         else:
             # TODO : This requires some tuning to get the desired refinement.
             g_min_part = 1. + (elevation / self.cutoff)**2. * (GROWTH_LIMIT - 1.)
-            g_min_part *= 0.8
             decay = (delta / rad)**2.5
             growth = np.min(g_min_part * (1. - decay) + GROWTH_LIMIT * decay)
         return growth * self.dA
@@ -87,6 +123,7 @@ class AreaConstraints(object):
 
         rad = self.particles[axis][:,3]
         elevation = self.particles[axis][:,axis] - rad
+        elevation = np.where(elevation < 0., 0., elevation)
         p_xy = self.particles[axis][:,((axis+1)%3,(axis+2)%3)]
 
         return [
@@ -94,13 +131,11 @@ class AreaConstraints(object):
             for _y in y
         ]
 
-    def build_area_constraint_grid(self, args):
+    def build_area_constraint_grid(self):
         # TODO : Change this to use particle data read from file. For now mocking
         #      : up a single particle from the command line args
-        particles = np.array([args.particle_center + [args.particle_radius]])
-
         p_ax = [
-            self.filter_particles(particles, axis)
+            self.filter_particles(self.particles, axis)
             for axis in range(3)
         ]
         p_ax = [

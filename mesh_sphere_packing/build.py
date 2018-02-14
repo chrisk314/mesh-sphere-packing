@@ -1,22 +1,40 @@
+#!/usr/bin/env python
 
-from mesh_sphere_packing.parser import parser
-from mesh_sphere_packing.reader import read_config_file, read_particle_file
+from mesh_sphere_packing import logger
+from mesh_sphere_packing.parse import get_parser, load_data
 from mesh_sphere_packing.splitsphere import splitsphere
 from mesh_sphere_packing.boundarypslg import boundarypslg
 from mesh_sphere_packing.tetmesh import build_tetmesh
 
 
-def build(args):
-    config = read_config_file(args.config_file)
-    particle_file = args.particle_file or config.particle_file
-    if particle_file:
-        L, PBC, particles = read_particle_file(particle_file)
-    segments = splitsphere(args)
-    boundaries = boundarypslg(segments, args)
-    mesh = build_tetmesh(segments, boundaries, args)
-    mesh.write_vtk('mesh.vtk')
+def output_mesh(mesh, config):
+    if not config.output_format:
+        return
+    logger.info('Outputting mesh in formats: {}'
+        .format(', '.join(config.output_format))
+    )
+    if 'vtk' in config.output_format:
+        mesh.write_vtk('mesh.vtk')
+    if 'poly' in config.output_format:
+        from mesh_sphere_packing.tetmesh import write_poly
+        write_poly('mesh.poly', mesh)
+    if 'multiflow' in config.output_format:
+        from mesh_sphere_packing.tetmesh import write_multiflow
+        write_multiflow('mesh.h5', mesh)
+
+
+def build(domain, particles, config):
+    logger.info('Starting mesh build process')
+
+    sphere_pieces = splitsphere(domain, particles, config)
+    boundaries = boundarypslg(domain, particles, sphere_pieces, config)
+    mesh = build_tetmesh(domain, sphere_pieces, boundaries, config)
+    output_mesh(mesh, config)
+
+    logger.info('Completed')
 
 
 if __name__ == '__main__':
-    args = parser.parse_args()
-    build(args)
+    args = get_parser().parse_args()
+    data = load_data(args)
+    build(*data)
