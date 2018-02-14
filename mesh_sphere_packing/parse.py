@@ -6,6 +6,7 @@ from collections import namedtuple
 import numpy as np
 import yaml
 
+from mesh_sphere_packing import OVERLAP_TRIM_FACTOR
 from mesh_sphere_packing.splitsphere import Domain, duplicate_particles,\
     extend_domain
 
@@ -116,6 +117,9 @@ def load_data(args):
             [0] + args.particle_center + [args.particle_radius]
         ])
     particles = duplicate_particles(L, particles, config)
+    if not config.allow_overlaps:
+        # TODO : Properly implement shrinking of particles to avoid overlaps.
+        particles[:,4] *= OVERLAP_TRIM_FACTOR
     L, particles = extend_domain(L, PBC, particles, config.segment_length)
     domain = Domain(L, PBC)
     return domain, particles, config
