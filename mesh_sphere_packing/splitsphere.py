@@ -101,8 +101,11 @@ class IntersectionPoints(object):
         if len(self.i_loop.ci_points) < 2:
             return self.i_loop.c
         if len(self.i_loop.ci_points) == 2:
-            return np.mean(self.i_loop.ci_points, axis=0)
+            return self.i_loop.c + np.mean(self.i_loop.ci_points, axis=0)
         return self.i_loop.sphere.bound_high * self.i_loop.domain.L
+
+    def __str__(self):
+        return '{}'.format(self.points)
 
 
 class IntersectionLoop(object):
@@ -175,10 +178,10 @@ class IntersectionLoop(object):
         self.added_points = []
         for phi1, phi2 in zip(phi[:-1], phi[1:]):
             add_points = self._add_phi_points(phi1, phi2)
-            self.added_points.append(
+            self.added_points.append((
                 self.iloop_zones(add_points),
                 IntersectionPoints(self, add_points)
-            )
+            ))
 
     def _add_phi_points(self, phi1, phi2):
         phi_disp = phi2 - phi1
@@ -198,6 +201,11 @@ class IntersectionLoop(object):
         z[self.i0] = True
         z2 = 1*z[2] + 2*z[1] + 4*z[0]
         return (z1, z2)
+
+    def __str__(self):
+        return 'c: {},\nr: {},\ni_points: {}\n'.format(
+            self.c, self.r, [(x[0], x[1].points) for x in self.added_points]
+        )
 
 
 class Sphere(object):
@@ -312,7 +320,7 @@ class Sphere(object):
                     i_loop_points[zone_map[z2]].append(i_points)
             else:
                 (z1, z2), i_points = ci.added_points[0]
-                if len(add_points) < 3:
+                if len(i_points.points) < 3:
                     # Intersection loop so small that only one segment lies on
                     # the boundary. Replace it with a single point.
                     i_points.points = np.mean(i_points.points, axis=0)
@@ -342,7 +350,7 @@ class Sphere(object):
             SpherePiece(self, points, trans, i_points)
             for points, trans, i_points
             in zip(sphere_pieces, translations, i_loop_points)
-            if len(points)
+            if len(points) or len(i_points)
         ]
 
 
@@ -354,12 +362,16 @@ class SpherePiece(object):
     point set in R^3.
     """
 
-    def __init__(self, sphere, points, trans_flag, i_points, is_hole=False):
+    def __init__(
+            self, sphere, points, trans_flag, i_points_list,
+            is_hole=False
+        ):
         self.sphere = sphere
         self.domain = sphere.domain
         self.trans_flag = trans_flag
         self.is_hole = is_hole
         self.points = points
+        self.i_points_list = i_points_list
 
     def construct(self):
         self.triangulate_surface_points()
@@ -367,26 +379,58 @@ class SpherePiece(object):
             self.apply_laplacian_smoothing()
             self.translate_points()
 
-    def triangulate_surface_points(self):
+    def i_loop_points(self):
+        return np.vstack([
+            i_points.points for i_points in self.i_points_list
+        ])
 
-        def tri_centroid_disp(tris, points, sphere):
+    def i_loop_origin_points(self):
+        return np.vstack([
+            i_points.origin for i_points in self.i_points_list
+        ])
+
+    def extract_surface_tris_from_chull(self, chull):
+
+        def tri_vec_prods(tris, points):
+            tri_points = points[tris]
+            AB = tri_points[:, 1] - tri_points[:, 0]
+            AC = tri_points[:, 2] - tri_points[:, 0]
+            return np.cross(AB, AC)
+
+        def get_tri_norms(tris, points):
+            norms = tri_vec_prods(tris, points)
+            return np.divide(norms, npl.norm(norms, axis=1)[:, np.newaxis])
+
+        def get_tri_centroids_norm(tris, points, sphere_center):
             c = ONE_THIRD * np.sum(points[tris], axis=1)
-            return npl.norm(c - sphere.x, axis=1)
+            c_rel = c - sphere_center
+            return np.divide(c_rel, npl.norm(c_rel, axis=1)[:, np.newaxis])
 
-        def extract_surface_tris_from_chull(chull, sphere):
-            tc_disp = tri_centroid_disp(chull.simplices, chull.points, sphere)
-            mask = tc_disp > 0.8 * sphere.r
-            surf_tris = chull.simplices[mask]
-            return surf_tris
+        def origin_to_tri_vec(tris, points, origin):
+            c = ONE_THIRD * np.sum(points[tris], axis=1)
+            c_rel = c - origin
+            return np.divide(c_rel, npl.norm(c_rel, axis=1)[:, np.newaxis])
 
+        tri_norms = get_tri_norms(chull.simplices, chull.points)
+        mask = np.full(len(chull.simplices), True)
+        for op in self.i_loop_origin_points():
+            ot_norm = origin_to_tri_vec(chull.simplices, chull.points, op)
+            op_mask = np.abs(np.sum(ot_norm * tri_norms, axis=1)) < 0.01
+            mask *= ~op_mask
+        return chull.simplices[mask]
+
+    def triangulate_surface_points(self):
         if self.is_hole:
             chull = ConvexHull(self.points)
             self.points, self.tris = chull.points, chull.simplices
         else:
-            com = self.points.mean(axis=0)
-            add_point = self.sphere.x - 2. * (com - self.sphere.x)
-            chull = ConvexHull(np.vstack((self.points, add_point)))
-            surf_tris = extract_surface_tris_from_chull(chull, self.sphere)
+            chull_points = np.vstack((
+                self.points,
+                self.i_loop_points(),
+                self.i_loop_origin_points()
+            ))
+            chull = ConvexHull(chull_points)
+            surf_tris = self.extract_surface_tris_from_chull(chull)
             self.points, self.tris = reindex_tris(chull.points, surf_tris)
 
     def apply_laplacian_smoothing(self):
