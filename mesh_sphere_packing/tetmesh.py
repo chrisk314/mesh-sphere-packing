@@ -170,11 +170,10 @@ def build_facet_list(sphere_pieces, boundaries):
 
 
 def build_hole_list(sphere_pieces):
-    # TODO : Ultimately each sphere segment will contain hole data
-    all_holes = []
-    for points in [p.points for p in sphere_pieces]:
-        all_holes.append(0.5 * (points.max(axis=0) + points.min(axis=0)))
-    return np.vstack(all_holes)
+    all_holes = [p.sphere.x for p in sphere_pieces if p.is_hole]
+    if len(all_holes):
+        return np.vstack(all_holes)
+    return np.empty((1,3))
 
 
 def build_tetmesh(domain, sphere_pieces, boundaries, config):
