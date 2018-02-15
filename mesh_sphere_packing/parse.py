@@ -1,5 +1,6 @@
 
 import argparse
+import os
 from argparse import FileType, RawTextHelpFormatter
 from collections import namedtuple
 
@@ -101,6 +102,13 @@ def load_data(args):
         try:
             L, PBC, particles = read_particle_file(particle_file)
         finally:
+            if not config.output_prefix:
+                output_prefix = os.path.splitext(
+                    os.path.basename(particle_file.name)
+                )[0]
+                output_prefix += ',a_%1.2e,s_%1.2e'\
+                    % (config.tetgen_max_volume, config.segment_length)
+                config = config._replace(output_prefix=output_prefix)
             particle_file.close()
     else:
         single_mode_missing_required = [
@@ -116,6 +124,8 @@ def load_data(args):
         particles = np.array([
             [0] + args.particle_center + [args.particle_radius]
         ])
+        if not config.output_prefix:
+            config = config._replace(output_prefix='./mesh')
     particles = duplicate_particles(L, particles, config)
     if not config.allow_overlaps:
         # TODO : Properly implement shrinking of particles to avoid overlaps.
@@ -220,7 +230,8 @@ def read_config_file(cfile):
         'tetgen_max_volume': 1.0e-05,
         'segment_length': 1.0e-04,
         'output_format': ['vtk', 'poly', 'off'],
-        'duplicate_particles': [False, False, False]
+        'duplicate_particles': [False, False, False],
+        'output_prefix': None,
     }
     if cfile:
         with cfile as f:
