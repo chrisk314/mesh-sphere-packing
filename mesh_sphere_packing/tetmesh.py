@@ -277,7 +277,7 @@ def build_hole_list(sphere_pieces):
     all_holes = [p.sphere.x for p in sphere_pieces if p.is_hole]
     if len(all_holes):
         return np.vstack(all_holes)
-    return np.empty((1,3))
+    return np.empty((0,3), dtype=np.float64)
 
 
 def build_tetmesh(domain, sphere_pieces, boundaries, config):
