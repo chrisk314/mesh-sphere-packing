@@ -1,13 +1,14 @@
 
 import argparse
 import os
+import warnings
 from argparse import FileType, RawTextHelpFormatter
 from collections import namedtuple
 
 import numpy as np
 import yaml
 
-from mesh_sphere_packing import OVERLAP_TRIM_FACTOR
+from mesh_sphere_packing import logger, OVERLAP_TRIM_FACTOR
 from mesh_sphere_packing.splitsphere import Domain, duplicate_particles,\
     extend_domain
 
@@ -94,6 +95,8 @@ def get_parser():
 
 
 def load_data(args):
+    logger.info('Reading program inputs')
+
     config = read_config_file(args.config_file)
     particle_file = args.particle_file or config.particle_file
     if particle_file:
@@ -179,6 +182,7 @@ def read_particle_file(pfile):
             raise ParticleFileReaderError(
                 'Domain extents in particle data file invalid.'
             ) from e
+
         try:
             PBC = np.array(
                 [bool(int(tok)) for tok in _readline(f).split()[:3]]
@@ -187,6 +191,7 @@ def read_particle_file(pfile):
             raise ParticleFileReaderError(
                 'PBC flags in particle data file invalid.'
             ) from e
+
         try:
             particles = np.loadtxt(f, dtype=np.float64)
         except Exception as e:
@@ -196,9 +201,8 @@ def read_particle_file(pfile):
         try:
             assert particles.shape[0] > 0
         except AssertionError as e:
-            raise ParticleFileReaderError(
-                'No particles specified in particle data file.'
-            ) from e
+            warnings.warn('Got empty particle set. Building mesh with no particles.')
+            particles = np.empty((0,5), dtype=np.float64)
         if particles.ndim == 1:
             particles = particles[np.newaxis,:]
         try:

@@ -201,7 +201,10 @@ def build_point_list(sphere_pieces, boundaries, L):
         piece_points.append(points)
         tris += vcount
         vcount += len(points)
-    piece_points = np.vstack(piece_points)
+    if len(piece_points):
+        piece_points = np.vstack(piece_points)
+    else:
+        piece_points = np.empty((0,3), dtype=np.float64)
 
     on_x_lower = np.isclose(piece_points[:,0], 0.)
     on_y_lower = np.isclose(piece_points[:,1], 0.)
