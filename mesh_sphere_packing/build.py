@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 from mesh_sphere_packing import logger
 from mesh_sphere_packing.parse import get_parser, load_data
