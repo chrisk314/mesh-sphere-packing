@@ -50,6 +50,54 @@ def redirect_tetgen_output(fname='./tet.log'):
         os.close(saved_stdout_fd)
 
 
+def write_msh(fname, mesh):
+    # Details of Gmsh format here http://gmsh.info/doc/texinfo/gmsh.html#File-formats
+    points = np.array(mesh.points, dtype=np.float64)
+    faces = np.array(mesh.faces, dtype=np.int32)
+    markers = np.array(mesh.face_markers, dtype=np.int32)
+    elements = np.array(mesh.elements, dtype=np.int32)
+
+    faces += 1
+    elements += 1
+
+    with open(fname, 'w') as f:
+        # Write header data
+        f.write('$MeshFormat\n2.2 0 8\n$EndMeshFormat\n')
+
+        # Write node data
+        f.write('$Nodes\n%d\n' % (len(points)))
+        for i, p in enumerate(points):
+            f.write('%d %+1.15e %+1.15e %+1.15e\n' % (i+1, *p,))
+        f.write('$EndNodes\n')
+
+        # Write face data
+        f.write('$Elements\n%d\n' % (len(faces)))
+        for i, (fac, m) in enumerate(zip(faces, markers)):
+            f.write('%d 2 2 %d 0 %d %d %d\n' % (i+1, m if m > 0 else -1, *fac,))
+        f.write('$EndElements\n')
+
+
+def write_ply(fname, mesh):
+    points, faces = list(mesh.points), list(mesh.faces)
+
+    with open(fname, 'w') as f:
+        # Write header data
+        f.write('ply\nascii 1.0\n')
+        f.write('element vertex %d\n' % len(points))
+        f.write('property float x\nproperty float y\nproperty float z\n')
+        f.write('element face %d\n' % len(faces))
+        f.write('property list uchar int vertex_index\n')
+        f.write('end_header\n')
+
+        # Write node data
+        for p in points:
+            f.write('%+1.15e %+1.15e %+1.15e\n' % (*p,))
+
+        # Write face data
+        for fac in faces:
+            f.write('3 %d %d %d\n' % (*fac,))
+
+
 def write_poly(fname, mesh):
     points, faces, markers, holes = list(mesh.points), list(mesh.faces),\
         list(mesh.face_markers), list(mesh.holes)
