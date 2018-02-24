@@ -33,7 +33,7 @@ def build(domain, particles, config):
     logger.info('Starting mesh build process')
 
     sphere_pieces = splitsphere(domain, particles, config)
-    boundaries = boundarypslg(domain, particles, sphere_pieces, config)
+    boundaries = boundarypslg(domain, sphere_pieces, config)
     mesh = build_tetmesh(domain, sphere_pieces, boundaries, config)
     output_mesh(mesh, config)
 

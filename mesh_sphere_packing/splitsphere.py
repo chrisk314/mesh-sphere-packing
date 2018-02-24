@@ -217,6 +217,7 @@ class Sphere(object):
         self.x = x
         self.r = r
         self.points = None
+        self.i_loops = []
 
     def initialise_points(self, ds):
         self.ds = ds
@@ -345,6 +346,8 @@ class Sphere(object):
                         sphere_pieces[zone_map[z1]] = surface_point.reshape((1,3))
                         i_loop_points[zone_map[z1]].append(i_points)
                         i_loop_points[zone_map[z2]].append(i_points)
+
+            self.i_loops.append(ci)
 
         return [
             SpherePiece(self, points, trans, i_points)

@@ -275,11 +275,11 @@ def triangulate_PSLGs(pslgs, area_constraints):
     return triangulated_boundaries
 
 
-def boundarypslg(domain, particles, sphere_pieces, config):
+def boundarypslg(domain, sphere_pieces, config):
     logger.info('Triangulating domain boundaries')
     ds = config.segment_length
 
     boundary_pslgs = build_boundary_PSLGs(domain, sphere_pieces, ds)
-    area_constraints = AreaConstraints(domain, particles, ds)
+    area_constraints = AreaConstraints(domain, sphere_pieces, ds)
 
     return triangulate_PSLGs(boundary_pslgs, area_constraints)
