@@ -17,8 +17,8 @@ def output_mesh(mesh, config):
         from mesh_sphere_packing.tetmesh import write_msh
         write_msh('%s.msh' % config.output_prefix, mesh)
     if 'multiflow' in config.output_format:
-        from mesh_sphere_packing.tetmesh import write_multiflow
-        write_multiflow('%s.h5' % config.output_prefix, mesh)
+        from mesh_sphere_packing.mfh5 import write_mfh5
+        write_mfh5('%s.h5' % config.output_prefix, mesh)
     if 'ply' in config.output_format:
         from mesh_sphere_packing.tetmesh import write_ply
         write_ply('%s.ply' % config.output_prefix, mesh)
