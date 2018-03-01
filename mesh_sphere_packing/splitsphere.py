@@ -381,6 +381,31 @@ class SpherePiece(object):
         if not self.is_hole:
             self.apply_laplacian_smoothing()
             self.translate_points()
+        else:
+            self.handle_points_near_boundaries()
+
+    def handle_points_near_boundaries(self, strength=0.10):
+        """Move points lying too close to domain boundaries to prevent bad tets."""
+        cutoff = strength * self.sphere.ds
+        self.sphere.bound_high = self.sphere.x > self.domain.L / 2.
+        dR = 0.05 * self.sphere.ds
+
+        close_ax = [np.isclose(
+            self.points[:,i], self.sphere.bound_high[i] * self.domain.L[i],
+            atol=cutoff, rtol=0.
+        ) for i in range(3)]
+
+        for i in range(3):
+            if not np.any(close_ax[i]):
+                continue
+            if self.sphere.bound_high[i]:
+                hemisphere_points = self.points[:,i] > self.sphere.x[i]
+            else:
+                hemisphere_points = self.points[:,i] < self.sphere.x[i]
+            dx = np.abs(self.points[hemisphere_points, i] - self.sphere.x[i])
+            adjustment = dR * (dx / self.sphere.r)**2.
+            adjustment *= (1. - 2. * self.sphere.bound_high[i])
+            self.points[hemisphere_points,i] += adjustment
 
     def i_loop_points(self):
         return np.vstack([
