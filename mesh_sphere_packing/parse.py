@@ -131,8 +131,7 @@ def load_data(args):
             config = config._replace(output_prefix='./mesh')
     particles = duplicate_particles(L, particles, config)
     if not config.allow_overlaps:
-        # TODO : Properly implement shrinking of particles to avoid overlaps.
-        particles[:,4] *= OVERLAP_TRIM_FACTOR
+        particles[:,4] -= 0.001 * particles[:,4].min()
     L, particles = extend_domain(L, PBC, particles, config.segment_length)
     domain = Domain(L, PBC)
     return domain, particles, config
