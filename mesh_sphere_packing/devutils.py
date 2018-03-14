@@ -31,7 +31,7 @@ def write_geomview(points, tris, fname):
 
 def output_sphere_pieces_geomview(sphere_pieces):
     for i, sp in enumerate(sphere_pieces):
-        write_geomview(sp.points, sp.tris, './segment_%d.off' % i)
+        write_geomview(sp.points, sp.tris, './sp_%d_p%d.off' % (i,sp.sphere.id))
 
 
 def output_boundaries_geomview(boundaries):
