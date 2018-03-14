@@ -212,16 +212,17 @@ class Sphere(object):
 
     """Sphere in R^3 with a unique id."""
 
-    def __init__(self, id, x, r):
+    def __init__(self, id, x, r, config):
+        self.config = config
         self.id = int(id)
         self.x = x
         self.r = r
         self.points = None
         self.i_loops = []
 
-    def initialise_points(self, ds):
-        self.ds = ds
-        num_points = int(4. * np.pi * self.r**2 / ds**2)
+    def initialise_points(self):
+        self.ds = self.config.segment_length
+        num_points = int(4. * np.pi * self.r**2 / self.ds**2)
         self.gen_spiral_points(num_points=num_points)
         self.min = self.points.min(axis=0)
         self.max = self.points.max(axis=0)
@@ -474,8 +475,8 @@ def splitsphere(domain, particles, config):
     logger.info('Splitting input particles')
     sphere_pieces = []
     for p in particles:
-        sphere = Sphere(p[0], p[1:4], p[4])
-        sphere.initialise_points(config.segment_length)
+        sphere = Sphere(p[0], p[1:4], p[4], config)
+        sphere.initialise_points()
         sphere_pieces += sphere.split(domain)
     for sphere_piece in sphere_pieces:
         sphere_piece.construct()
