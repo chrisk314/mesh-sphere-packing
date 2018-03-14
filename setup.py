@@ -17,4 +17,5 @@ setup(
     ],
     author='Chris Knight',
     author_email='chrisk314@gmail.com',
+    url='https://github.com/chrisk314/mesh-sphere-packing',
 )
