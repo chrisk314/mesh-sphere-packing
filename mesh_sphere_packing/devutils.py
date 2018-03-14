@@ -218,3 +218,37 @@ def contour_plot(x, y, z):
     plt.clabel(CS, inline=1, fontsize=10)
     plt.show()
 
+AABB = np.array([[0.00267, 0.00374], [0.00102, 0.00178], [0.00102, 0.00204]])
+
+def extract_by_region(msp_file, config_file, AABB):
+    from collections import namedtuple
+    from mesh_sphere_packing.parse import load_data
+
+    Args = namedtuple('Args', [
+        'config_file', 'particle_file'
+    ])
+    args = Args(config_file=open(config_file,'r'), particle_file=open(msp_file,'r'))
+
+    domain, particles, config = load_data(args)
+
+    keep_idx = np.where(
+        (particles[:,1] > AABB[0,0]) & (particles[:,1] < AABB[0,1]) &
+        (particles[:,2] > AABB[1,0]) & (particles[:,2] < AABB[1,1]) &
+        (particles[:,3] > AABB[2,0]) & (particles[:,3] < AABB[2,1])
+    )
+
+    # Set domain boundaries based on AABB
+    box = AABB[:,1]-AABB[:,0]
+    shift = 1.2 * particles[keep_idx,4].max()
+    box[1:] += 2 * shift
+    # Adjust particle positions to lie entirely within AABB
+    particles[keep_idx,1:4] -= AABB[:,0]
+    particles[keep_idx,2:4] += shift
+
+    # TODO : Give the file a descriptive name.
+    fname = 'tmp.msp'
+    with open(fname, 'w') as f:
+        f.write('%1.15e %1.15e %1.15e\n' % (*box,))
+        f.write('%d %d %d\n' % (*domain.PBC,))
+        np.savetxt(f, particles[keep_idx], fmt='%d %+1.15e %+1.15e %+1.15e %1.15e')
+
