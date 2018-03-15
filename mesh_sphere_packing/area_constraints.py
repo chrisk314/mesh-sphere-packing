@@ -144,47 +144,53 @@ class AreaConstraints(object):
         y = np.arange(0.5 * dy, Ly, dy)
         # TODO : Improve variable naming here.
 
-        rad = self.spheres[axis][:,3]
-        elevation = self.spheres[axis][:,axis] - rad
-        elevation = np.where(elevation < 0., 0., elevation)
-        p_xy = self.spheres[axis][:,((axis+1)%3,(axis+2)%3)]
+        sphere_constraints = [[GROWTH_LIMIT * self.dA for _x in x] for _y in y]
 
-        sphere_constraints = [
-            [
-                self.area_constraint_spheres(_x, _y, p_xy, elevation, rad)
-                for _x in x
+        if len(self.spheres[axis]):
+            rad = self.spheres[axis][:,3]
+            elevation = self.spheres[axis][:,axis] - rad
+            elevation = np.where(elevation < 0., 0., elevation)
+            p_xy = self.spheres[axis][:,((axis+1)%3,(axis+2)%3)]
+
+            sphere_constraints = [
+                [
+                    self.area_constraint_spheres(_x, _y, p_xy, elevation, rad)
+                    for _x in x
+                ]
+                for _y in y
             ]
-            for _y in y
-        ]
 
-        if not len(self.i_loops[axis]):
-            return sphere_constraints
+        if len(self.i_loops[axis]):
+            rad = self.i_loops[axis][:,3]
+            il_xy = self.i_loops[axis][:,((axis+1)%3,(axis+2)%3)]
 
-        rad = self.i_loops[axis][:,3]
-        il_xy = self.i_loops[axis][:,((axis+1)%3,(axis+2)%3)]
+            i_loop_constraints = [
+                [self.area_constraint_i_loops(_x, _y, il_xy, rad) for _x in x]
+                for _y in y
+            ]
 
-        i_loop_constraints = [
-            [self.area_constraint_i_loops(_x, _y, il_xy, rad) for _x in x]
-            for _y in y
-        ]
+            return np.minimum(sphere_constraints, i_loop_constraints)
 
-        return np.minimum(sphere_constraints, i_loop_constraints)
+        return sphere_constraints
 
     def build_area_constraint_grid(self):
         # TODO : Change this to use particle data read from file. For now mocking
         #      : up a single particle from the command line args
-        p_ax = [
-            self.filter_spheres(axis) for axis in range(3)
-        ]
-        p_ax = [
-            np.vstack((p[0], self.translate_upper_spheres(p[1], axis)))
-            for axis, p in enumerate(p_ax)
-        ]
-        p_ax = [
-            self.duplicate_edge_spheres(p, axis)
-            for axis, p in enumerate(p_ax)
-        ]
-        self.spheres = p_ax
+        if len(self.spheres):
+            p_ax = [
+                self.filter_spheres(axis) for axis in range(3)
+            ]
+            p_ax = [
+                np.vstack((p[0], self.translate_upper_spheres(p[1], axis)))
+                for axis, p in enumerate(p_ax)
+            ]
+            p_ax = [
+                self.duplicate_edge_spheres(p, axis)
+                for axis, p in enumerate(p_ax)
+            ]
+            self.spheres = p_ax
+        else:
+            self.spheres = [[] for _ in range(3)]
 
         if len(self.i_loops):
             il_ax = [
