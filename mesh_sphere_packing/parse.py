@@ -1,12 +1,14 @@
 
 import argparse
+import os
+import warnings
 from argparse import FileType, RawTextHelpFormatter
 from collections import namedtuple
 
 import numpy as np
 import yaml
 
-from mesh_sphere_packing import OVERLAP_TRIM_FACTOR
+from mesh_sphere_packing import logger, OVERLAP_TRIM_FACTOR
 from mesh_sphere_packing.splitsphere import Domain, duplicate_particles,\
     extend_domain
 
@@ -93,6 +95,8 @@ def get_parser():
 
 
 def load_data(args):
+    logger.info('Reading program inputs')
+
     config = read_config_file(args.config_file)
     particle_file = args.particle_file or config.particle_file
     if particle_file:
@@ -101,6 +105,13 @@ def load_data(args):
         try:
             L, PBC, particles = read_particle_file(particle_file)
         finally:
+            if not config.output_prefix:
+                output_prefix = os.path.splitext(
+                    os.path.basename(particle_file.name)
+                )[0]
+                output_prefix += ',a_%1.2e,s_%1.2e'\
+                    % (config.tetgen_max_volume, config.segment_length)
+                config = config._replace(output_prefix=output_prefix)
             particle_file.close()
     else:
         single_mode_missing_required = [
@@ -116,10 +127,11 @@ def load_data(args):
         particles = np.array([
             [0] + args.particle_center + [args.particle_radius]
         ])
+        if not config.output_prefix:
+            config = config._replace(output_prefix='./mesh')
     particles = duplicate_particles(L, particles, config)
     if not config.allow_overlaps:
-        # TODO : Properly implement shrinking of particles to avoid overlaps.
-        particles[:,4] *= OVERLAP_TRIM_FACTOR
+        particles[:,4] -= 0.001 * particles[:,4].min()
     L, particles = extend_domain(L, PBC, particles, config.segment_length)
     domain = Domain(L, PBC)
     return domain, particles, config
@@ -169,6 +181,7 @@ def read_particle_file(pfile):
             raise ParticleFileReaderError(
                 'Domain extents in particle data file invalid.'
             ) from e
+
         try:
             PBC = np.array(
                 [bool(int(tok)) for tok in _readline(f).split()[:3]]
@@ -177,6 +190,7 @@ def read_particle_file(pfile):
             raise ParticleFileReaderError(
                 'PBC flags in particle data file invalid.'
             ) from e
+
         try:
             particles = np.loadtxt(f, dtype=np.float64)
         except Exception as e:
@@ -186,9 +200,8 @@ def read_particle_file(pfile):
         try:
             assert particles.shape[0] > 0
         except AssertionError as e:
-            raise ParticleFileReaderError(
-                'No particles specified in particle data file.'
-            ) from e
+            warnings.warn('Got empty particle set. Building mesh with no particles.')
+            particles = np.empty((0,5), dtype=np.float64)
         if particles.ndim == 1:
             particles = particles[np.newaxis,:]
         try:
@@ -220,7 +233,8 @@ def read_config_file(cfile):
         'tetgen_max_volume': 1.0e-05,
         'segment_length': 1.0e-04,
         'output_format': ['vtk', 'poly', 'off'],
-        'duplicate_particles': [False, False, False]
+        'duplicate_particles': [False, False, False],
+        'output_prefix': None,
     }
     if cfile:
         with cfile as f:

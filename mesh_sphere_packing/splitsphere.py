@@ -2,6 +2,7 @@
 import numpy as np
 from numpy import linalg as npl
 from numpy import random as npr
+from scipy.spatial import cKDTree
 from scipy.spatial.qhull import ConvexHull
 
 from mesh_sphere_packing import logger, TOL, ONE_THIRD
@@ -35,7 +36,7 @@ def reindex_tris(points, tris):
 def extend_domain(L, PBC, particles, ds):
     for axis in range(3):
         if not PBC[axis]:
-            pad_extra = 3. * ds
+            pad_extra = 0.5 * particles[:,4].min()
 
             pad_low = np.min(particles[:,axis+1] - particles[:,4])
             pad_low -= pad_extra
@@ -212,15 +213,17 @@ class Sphere(object):
 
     """Sphere in R^3 with a unique id."""
 
-    def __init__(self, id, x, r):
+    def __init__(self, id, x, r, config):
+        self.config = config
         self.id = int(id)
         self.x = x
         self.r = r
         self.points = None
+        self.i_loops = []
 
-    def initialise_points(self, ds):
-        self.ds = ds
-        num_points = int(4. * np.pi * self.r**2 / ds**2)
+    def initialise_points(self):
+        self.ds = self.config.segment_length
+        num_points = int(4. * np.pi * self.r**2 / self.ds**2)
         self.gen_spiral_points(num_points=num_points)
         self.min = self.points.min(axis=0)
         self.max = self.points.max(axis=0)
@@ -346,6 +349,8 @@ class Sphere(object):
                         i_loop_points[zone_map[z1]].append(i_points)
                         i_loop_points[zone_map[z2]].append(i_points)
 
+            self.i_loops.append(ci)
+
         return [
             SpherePiece(self, points, trans, i_points)
             for points, trans, i_points
@@ -372,12 +377,38 @@ class SpherePiece(object):
         self.is_hole = is_hole
         self.points = points
         self.i_points_list = i_points_list
+        self.x = np.copy(sphere.x)
 
     def construct(self):
         self.triangulate_surface_points()
         if not self.is_hole:
             self.apply_laplacian_smoothing()
             self.translate_points()
+        else:
+            self.handle_points_near_boundaries()
+
+    def handle_points_near_boundaries(self, strength=0.10):
+        """move points lying too close to domain boundaries to prevent bad tets."""
+        cutoff = strength * self.sphere.ds
+        self.sphere.bound_high = self.sphere.x > self.domain.L / 2.
+        dr = 0.05 * self.sphere.ds
+
+        close_ax = [np.isclose(
+            self.points[:,i], self.sphere.bound_high[i] * self.domain.L[i],
+            atol=cutoff, rtol=0.
+        ) for i in range(3)]
+
+        for i in range(3):
+            if not np.any(close_ax[i]):
+                continue
+            if self.sphere.bound_high[i]:
+                hemisphere_points = self.points[:,i] > self.sphere.x[i]
+            else:
+                hemisphere_points = self.points[:,i] < self.sphere.x[i]
+            dx = np.abs(self.points[hemisphere_points, i] - self.sphere.x[i])
+            adjustment = dr * (dx / self.sphere.r)**2.
+            adjustment *= (1. - 2. * self.sphere.bound_high[i])
+            self.points[hemisphere_points,i] += adjustment
 
     def i_loop_points(self):
         return np.vstack([
@@ -438,17 +469,77 @@ class SpherePiece(object):
         pass
 
     def translate_points(self):
-        self.x = self.sphere.x + self.trans_flag * self.domain.L
+        self.x += self.trans_flag * self.domain.L
         self.points += self.x - self.sphere.x
+
+
+def handle_overlaps(sphere_pieces, config, strength=0.10):
+    """Move points to prevent particle overlaps."""
+
+    def adjust_points_along_normal(sp, norm, dr):
+        dpp = np.dot(sp.x, norm)  # Normal distance from origin to sphere center
+
+        dist_point = np.dot(sp.points, norm)  # Normal distance from origin to points
+        dist_point -= dpp                     # Normal distance of points from plane
+        hemi_points_mask = dist_point > 0.    # Points above plane
+
+        # Ensure that no points lying on boundaries are adjusted
+        for i in range(3):
+            hemi_points_mask &= ~np.isclose(sp.points[:,i], sp.domain.L[i])
+            hemi_points_mask &= ~np.isclose(sp.points[:,i], 0.)
+
+        # Apply adustment translation vector to each point
+        adjustment = dr * (dist_point[hemi_points_mask] / sp.sphere.r)**2.
+        sp.points[hemi_points_mask] -= adjustment[:,np.newaxis] * norm
+
+    # Construct KD tree of particle centers
+    c = np.array([sp.x for sp in sphere_pieces])
+    r = np.array([sp.sphere.r for sp in sphere_pieces])
+    tree = cKDTree(c)
+
+    min_delta = strength * config.segment_length
+    cutoff = 2. * r.max() + min_delta
+
+    # Find pairs of potentially overlapping particles
+    pairs = tree.query_pairs(cutoff, output_type='ndarray')
+    del tree
+
+    c_pairs = c[pairs]
+    branch_vec_pairs = c_pairs[:,1,:] - c_pairs[:,0,:]
+    dist_pairs = npl.norm(branch_vec_pairs, axis=1)
+    sum_rad_pairs = np.sum(r[pairs], axis=1)
+
+    # Identify pairs which overlap
+    overlap_pairs_idx = np.where(dist_pairs < sum_rad_pairs + min_delta)
+
+    pairs = pairs[overlap_pairs_idx]
+    branch_vec_pairs = branch_vec_pairs[overlap_pairs_idx]
+    dist_pairs = dist_pairs[overlap_pairs_idx]
+    sum_rad_pairs = sum_rad_pairs[overlap_pairs_idx]
+
+    # Retraction distance for each pair of spheres
+    dr_pairs = 0.5 * (min_delta - (dist_pairs - sum_rad_pairs))
+    norm_pairs = np.divide(
+        branch_vec_pairs, npl.norm(branch_vec_pairs, axis=1)[:,np.newaxis]
+    )
+
+    # correct overlaps
+    for (i, j), norm,  dr in zip(pairs, norm_pairs, dr_pairs):
+        adjust_points_along_normal(sphere_pieces[i], norm, dr)
+        adjust_points_along_normal(sphere_pieces[j], -1. * norm, dr)
 
 
 def splitsphere(domain, particles, config):
     logger.info('Splitting input particles')
     sphere_pieces = []
+    # Create analytical representation of sphere
     for p in particles:
-        sphere = Sphere(p[0], p[1:4], p[4])
-        sphere.initialise_points(config.segment_length)
+        sphere = Sphere(p[0], p[1:4], p[4], config)
+        sphere.initialise_points()
         sphere_pieces += sphere.split(domain)
+    # Generate point sets at sphere surfaces
     for sphere_piece in sphere_pieces:
         sphere_piece.construct()
+    # Handle overlaps
+    handle_overlaps(sphere_pieces, config)
     return sphere_pieces
