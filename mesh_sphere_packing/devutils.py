@@ -159,6 +159,34 @@ def plot_added_points(particles, points, L, axis):
     plt.show()
 
 
+def plot_area_constraints(area_constraints):
+    import matplotlib.pyplot as plt
+    from pint import UnitRegistry
+    ureg = UnitRegistry()
+    width_inch = (60 * ureg.mm).to(ureg.inch).magnitude
+    height_inch = (60 * ureg.mm).to(ureg.inch).magnitude
+    plot_dpi = 600
+    params = {
+        'text.usetex' : True,
+        'font.family' : 'times',
+        'text.latex.unicode': True,
+        'text.latex.preamble': [r"\usepackage{times}", r"\usepackage{siunitx}"],
+    }
+    plt.rcParams.update(params)
+    # fig, ax = plt.subplots(111, figsize=(width_inch, height_inch), dpi=plot_dpi)
+    # ax.matshow(area_constraints.grid[2], origin='lower', cmap=plt.get_cmap('plasma'))
+    # ax.xaxis.set_ticks_position('bottom')
+    fig = plt.figure(figsize=(width_inch, height_inch))
+    plt.matshow(area_constraints.grid[2], fignum=1, origin='lower', cmap=plt.get_cmap('plasma'))
+    ax = fig.axes[0]
+    ax.xaxis.set_ticks_position('bottom')
+    plt.xlabel('$x$')
+    plt.ylabel('$y$')
+    plt.tight_layout()
+    plt.savefig('area_constraints_z.pdf', dpi=plot_dpi, format='pdf', bbox_inches='tight',
+            pad_inches=0)
+
+
 def test_tri_refinefunc(rfunc=None):
     from meshpy import triangle
     L = np.array([2., 2.])
