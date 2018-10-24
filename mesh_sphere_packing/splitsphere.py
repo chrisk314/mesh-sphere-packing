@@ -382,13 +382,13 @@ class SpherePiece(object):
     def construct(self):
         self.triangulate_surface_points()
         if not self.is_hole:
-            self.apply_laplacian_smoothing()
+            #self.apply_laplacian_smoothing()
             self.translate_points()
         else:
             self.handle_points_near_boundaries()
 
     def handle_points_near_boundaries(self, strength=0.10):
-        """move points lying too close to domain boundaries to prevent bad tets."""
+        """Move points lying too close to domain boundaries to prevent bad tets."""
         cutoff = strength * self.sphere.ds
         self.sphere.bound_high = self.sphere.x > self.domain.L / 2.
         dr = 0.05 * self.sphere.ds
@@ -466,7 +466,7 @@ class SpherePiece(object):
 
     def apply_laplacian_smoothing(self):
         # TODO : implement Laplacian smoothing of inner sphere piece vertices
-        pass
+        raise NotImplementedError
 
     def translate_points(self):
         self.x += self.trans_flag * self.domain.L
