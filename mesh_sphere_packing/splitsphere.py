@@ -531,15 +531,19 @@ def handle_overlaps(sphere_pieces, config, strength=0.10):
 
 def splitsphere(domain, particles, config):
     logger.info('Splitting input particles')
-    sphere_pieces = []
+
     # Create analytical representation of sphere
+    sphere_pieces = []
     for p in particles:
         sphere = Sphere(p[0], p[1:4], p[4], config)
         sphere.initialise_points()
         sphere_pieces += sphere.split(domain)
+
     # Generate point sets at sphere surfaces
     for sphere_piece in sphere_pieces:
         sphere_piece.construct()
+
     # Handle overlaps
     handle_overlaps(sphere_pieces, config)
+
     return sphere_pieces
