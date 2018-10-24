@@ -1,4 +1,3 @@
-
 import numpy as np
 from numpy import linalg as npl
 from meshpy import triangle
@@ -11,11 +10,58 @@ from mesh_sphere_packing.area_constraints import AreaConstraints
 #      : of a sphere surface. This is confusing...
 
 
+class PSLG(object):
+
+    """Stores geometry and topology of a Planar Straigh Line Graph."""
+
+    def __init__(self, points, edges, holes):
+        """Constructs PSLG object.
+        :param points numpy.ndarray: array of PSLG vertex coordinates.
+        :param adges numpy.ndarray: array of PSLG edges (vertex topology).
+        :param holes numpy.ndarray: array of coordinates of holes in the PSLG.
+        """
+        self.points = points
+        self.edges = edges
+        self.holes = holes
+
+
+class BoundaryPLC(object):
+
+    """Stores geometry and topology of a Piecewise Linear Complex forming a domain
+    boundary.
+    """
+
+    def __init__(self, points, tris, holes):
+        """Constructs BoundaryPLC object.
+        :param points numpy.ndarray: array of PLC vertex coordinates.
+        :param adges numpy.ndarray: array of PLC tris (vertex topology).
+        :param holes numpy.ndarray: array of coordinates of holes in the PLC.
+        """
+        self.points = points
+        self.tris = tris
+        self.holes = holes
+
+
 def build_boundary_PSLGs(domain, sphere_pieces, ds):
+    """Constructs PSLGs for domain boundaries. Each boundary is represented by a
+    Planar Straight Line Graph consisting of set of vertices and edges corresponding
+    to the union of all intersection loops which lie on the boundary and all boundary
+    perimeter vertices and edges.
+    :param domain Domain: spatial domain for mesh.
+    :param sphere_pieces list: list of SpherePiece objects.
+    :param ds float: characteristic segment length.
+    :return: list of PSLG objects for the lower bounds along each coordinate axis.
+    :rtype: list.
+    """
     # TODO : Break up this function a bit.
 
     def compile_points_edges(sphere_pieces):
-
+        """Produces consolidated arrays containing all SpherePiece vertices and
+        edges.
+        :param sphere_pieces list: list of SpherePiece objects.
+        :return: tuple of arrays of vertex coordinates and topology.
+        :rtype: tuple.
+        """
         def build_edge_list(tris, points):
             v_adj = np.zeros(2*[points.shape[0]], dtype=np.int32)
             v_adj[tris[:,0], tris[:,1]] = v_adj[tris[:,1], tris[:,0]] = 1
@@ -35,6 +81,13 @@ def build_boundary_PSLGs(domain, sphere_pieces, ds):
         return np.vstack(all_points), np.vstack(all_edges)
 
     def refined_perimeter(perim, axis, ds):
+        """Adds additional vertices to subdivide perimeter edge segments.
+        :param perim numpy.ndarray: array of vertices intersecting perimeter.
+        :param axis int: ordinal value of axis 0:x, 1:y, 2:z.
+        :param ds float: characteristic segment length.
+        :return: array of vertices intersecting refined perimeter.
+        :rtype: numpy.ndarray.
+        """
 
         def filter_colocated_points(perim, axis):
             delta = np.diff(perim[:,axis])
@@ -54,6 +107,11 @@ def build_boundary_PSLGs(domain, sphere_pieces, ds):
         return np.vstack(refined_points)
 
     def add_holes(sphere_pieces):
+        """Add hole points to boundary PSLGs.
+        :param sphere_pieces list: list of SpherePiece objects.
+        :return: array of hole point vertices.
+        :rtype: numpy.ndarray.
+        """
         # TODO : this is a placeholder function. Ultimately holes need to
         #      : be created at the point when a sphere is split into pieces.
         holes = [[] for _ in range(3)]
@@ -71,15 +129,28 @@ def build_boundary_PSLGs(domain, sphere_pieces, ds):
         return holes
 
     def reindex_edges(points, points_ax, edges_ax):
+        """Reindexes edges along a given axis.
+        :param points numpy.ndarray: all point coordinates.
+        :param points_ax numpy.ndarray: indices of points intersecting boundary.
+        :param edges_ax numpy.ndarray: edges interecting boundary.
+        :return: tuple of arrays of point coordinates and reindexed edges.
+        :rtype: tuple.
+        """
         points_segment = points[points_ax]
         reindex = {old: new for new, old in enumerate(np.where(points_ax)[0])}
         for i, (v0, v1) in enumerate(edges_ax):
             edges_ax[i] = np.array([reindex[v0], reindex[v1]])
         return points_segment, edges_ax
 
-    def build_perim_edge_list(points_ax, perim_refined):
+    def build_perim_edge_list(points_pieces, perim_refined):
+        """Construct list of perimeter edges for boundary.
+        :param points_pieces numpy.ndarray: sphere points intersecting boundary.
+        :param perim_refined numpy.ndarray: refined perimeter points.
+        :return: array of perimeter edge topology for boundary.
+        :rtype: numpy.ndarray.
+        """
         # Need to adjust edge indices for perimeter segments
-        v_count = len(points_ax)
+        v_count = len(points_pieces)
         perim_edges = 4 * [None]
         for j in range(4):
             v_count_perim = len(perim_refined[j])
@@ -87,7 +158,7 @@ def build_boundary_PSLGs(domain, sphere_pieces, ds):
             mask = np.full(v_count_perim, True)
             v_count_new = 0
             for i, p in enumerate(perim_refined[j]):
-                vidx = np.where(np.isclose(npl.norm(points_ax - p, axis=1), 0.))[0]
+                vidx = np.where(np.isclose(npl.norm(points_pieces - p, axis=1), 0.))[0]
                 if len(vidx):
                     mask[i] = False
                     perim_vidx[i] = vidx[0]
@@ -101,19 +172,24 @@ def build_boundary_PSLGs(domain, sphere_pieces, ds):
             v_count += v_count_new
         return perim_edges
 
-    def add_point_plane_intersections(hole_pieces, axis, L):
-        # TODO : Adding of points or edges which intersect boundaries should
-        #      : be handled more carefully than this during sphere splitting.
+    def add_point_plane_intersections(hole_pieces, axis, domain):
+        """Adds points for sphere which just "touch" the boundary at a single point.
+        :param hole_pieces list: list of SpherePiece objects.
+        :param axis int: ordinal value of axis 0:x, 1:y, 2:z.
+        :param domain Domain: spatial domain for mesh.
+        :return: array of points touching boundary (may be empty).
+        :rtype: numpy.ndarray.
+        """
         added_points = []
         for hole_piece in hole_pieces:
             if np.isclose(hole_piece.sphere.min[axis], 0.):
                 close = np.where(np.isclose(hole_piece.points[:,axis], 0.))[0]
                 for idx in close:
                     added_points.append(hole_piece.points[idx])
-            elif np.isclose(hole_piece.sphere.max[axis], L[axis]):
-                close = np.where(np.isclose(hole_piece.points[:,axis], L[axis]))[0]
+            elif np.isclose(hole_piece.sphere.max[axis], domain.L[axis]):
+                close = np.where(np.isclose(hole_piece.points[:,axis], domain.L[axis]))[0]
                 trans = np.zeros(3)
-                trans[axis] = -L[axis]
+                trans[axis] = -domain.L[axis]
                 for idx in close:
                     added_points.append(hole_piece.points[idx] + trans)
         if added_points:
@@ -210,7 +286,7 @@ def build_boundary_PSLGs(domain, sphere_pieces, ds):
 
     # Add points which lie on the boundaries from hole particles
     added_points = [
-        add_point_plane_intersections(sphere_pieces_holes, i, L)
+        add_point_plane_intersections(sphere_pieces_holes, i, domain)
         for i in range(3)
     ]
 
@@ -223,14 +299,21 @@ def build_boundary_PSLGs(domain, sphere_pieces, ds):
             added_points[i][:,((i+1)%3,(i+2)%3)]
         ))
         pslg_edges = np.vstack((edges_ax[i], np.vstack(perim_edges[i])))
-        boundary_pslgs.append((pslg_points, pslg_edges, pslg_holes[i]))
+        boundary_pslgs.append(PSLG(pslg_points, pslg_edges, pslg_holes[i]))
     return boundary_pslgs
 
 
 def triangulate_PSLGs(pslgs, area_constraints):
-
+    """Triangulates lower boundaries along each coordinate axis using Shewchuk's
+    Triangle library.
+    :param pslgs list: list of PSLG objects for the boundaries.
+    :param area_constraints AreaConstraints: object storing area constraint grids for
+    quality triangulation.
+    :return: list of BoundaryPLC objects for the triangulated boundaries.
+    :rtype: list.
+    """
     triangulated_boundaries = []
-    for i, (points, edges, holes) in enumerate(pslgs):
+    for i, pslg in enumerate(pslgs):
 
         target_area_grid = area_constraints.grid[i]
         inv_dx = area_constraints.inv_dx[i]
@@ -247,10 +330,10 @@ def triangulate_PSLGs(pslgs, area_constraints):
 
         # Set mesh info for triangulation
         mesh_data = triangle.MeshInfo()
-        mesh_data.set_points(points)
-        mesh_data.set_facets(edges.tolist())
-        if len(holes):
-            mesh_data.set_holes(holes)
+        mesh_data.set_points(pslg.points)
+        mesh_data.set_facets(pslg.edges.tolist())
+        if len(pslg.holes):
+            mesh_data.set_holes(pslg.holes)
 
         # Call triangle library to perform Delaunay triangulation
         max_volume = area_constraints.dA_max
@@ -271,15 +354,22 @@ def triangulate_PSLGs(pslgs, area_constraints):
         holes = np.column_stack((np.zeros(len(mesh.holes)), np.array(mesh.holes)))
         holes = holes[:,(-i%3,(1-i)%3,(2-i)%3)]
 
-        triangulated_boundaries.append((points, tris, holes))
+        triangulated_boundaries.append(BoundaryPLC(points, tris, holes))
     return triangulated_boundaries
 
 
 def boundarypslg(domain, sphere_pieces, config):
+    """Handles creation of high quality triangulations of the domain boundaries.
+    :param domain Domain: spatial domain for mesh.
+    :param sphere_pieces list: list of SpherePiece objects.
+    :param config Config: configuration for mesh build.
+    :return: list of BoundaryPLC objects for the triangulated boundaries.
+    :rtype: list.
+    """
     logger.info('Triangulating domain boundaries')
     ds = config.segment_length
 
-    boundary_pslgs = build_boundary_PSLGs(domain, sphere_pieces, ds)
+    boundary_PSLGs = build_boundary_PSLGs(domain, sphere_pieces, ds)
     area_constraints = AreaConstraints(domain, sphere_pieces, ds)
 
-    return triangulate_PSLGs(boundary_pslgs, area_constraints)
+    return triangulate_PSLGs(boundary_PSLGs, area_constraints)

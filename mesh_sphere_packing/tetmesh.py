@@ -1,5 +1,5 @@
-
 from contextlib import contextmanager
+from copy import deepcopy
 
 import numpy as np
 from numpy import linalg as npl
@@ -11,6 +11,7 @@ from mesh_sphere_packing import logger, TOL
 
 @contextmanager
 def redirect_tetgen_output(fname='./tet.log'):
+    """Context manager to redirect stdout of TetGen subprocess to file `fname`."""
     import ctypes, io, os, sys
 
     libc = ctypes.CDLL(None)
@@ -23,6 +24,7 @@ def redirect_tetgen_output(fname='./tet.log'):
         sys.stdout = io.TextIOWrapper(os.fdopen(original_stdout_fd, 'wb'))
 
     def extract_stats(f):
+        """Returns string containing key metrics of the constructed mesh."""
         while True:
             l = f.readline()
             if 'Statistics:' in l.decode('ascii'):
@@ -51,7 +53,11 @@ def redirect_tetgen_output(fname='./tet.log'):
 
 
 def write_msh(fname, mesh):
-    # Details of Gmsh format here http://gmsh.info/doc/texinfo/gmsh.html#File-formats
+    """Outputs mesh in Gmsh format. Details of Gmsh format available here:
+    http://gmsh.info/doc/texinfo/gmsh.html#File-formats
+    :param fname str: file path for mesh output.
+    :param mesh MeshInfo: tetrahedral mesh.
+    """
     points = np.array(mesh.points, dtype=np.float64)
     faces = np.array(mesh.faces, dtype=np.int32)
     markers = np.array(mesh.face_markers, dtype=np.int32)
@@ -78,6 +84,11 @@ def write_msh(fname, mesh):
 
 
 def write_ply(fname, mesh):
+    """Outputs mesh in ply format. Details of ply format available here:
+    http://paulbourke.net/dataformats/ply/
+    :param fname str: file path for mesh output.
+    :param mesh MeshInfo: tetrahedral mesh.
+    """
     points, faces = list(mesh.points), list(mesh.faces)
 
     with open(fname, 'w') as f:
@@ -99,6 +110,11 @@ def write_ply(fname, mesh):
 
 
 def write_poly(fname, mesh):
+    """Outputs mesh in tetgen poly format. Details of tetgen poly format available here:
+    http://wias-berlin.de/software/tetgen/fformats.poly.html
+    :param fname str: file path for mesh output.
+    :param mesh MeshInfo: tetrahedral mesh.
+    """
     points, faces, markers, holes = list(mesh.points), list(mesh.faces),\
         list(mesh.face_markers), list(mesh.holes)
     with open(fname, 'w') as f:
@@ -117,10 +133,12 @@ def write_poly(fname, mesh):
 
 
 def write_multiflow(fname, mesh):
-    # TODO : Necessary to avoid numpy related warnings from h5py (h5py/h5py#961)
-    import warnings
-    warnings.simplefilter('ignore')
-
+    """Outputs mesh in multiflow format.
+    WARNING: This method is slow! See work on the branch below for a C implementation:
+    https://github.com/chrisk314/mesh-sphere-packing/tree/fea-write-mfmesh-c
+    :param fname str: file path for mesh output.
+    :param mesh MeshInfo: tetrahedral mesh.
+    """
     from collections import defaultdict
     import h5py as h5
 
@@ -181,18 +199,31 @@ def write_multiflow(fname, mesh):
         ])
 
 
-def duplicate_lower_boundaries(lower_boundaries, L):
-    upper_boundaries = []
-    for i, (points, tris, holes) in enumerate(lower_boundaries):
-        translate = np.array([[L[j] if j==i else 0. for j in range(3)]])
-        points_upper = points.copy() + translate
-        tris_upper = tris.copy()
-        holes_upper = holes.copy() + translate
-        upper_boundaries.append((points_upper, tris_upper, holes_upper))
+def duplicate_lower_boundaries(domain, lower_boundaries):
+    """Duplicates geometry and topology of lower boundaries at upper bound
+    to ensure congruence of boundary triangles across PBCs.
+    :param domain Domain: spatial domain for mesh.
+    :param lower_boundaries list: list of lower bound boundaryPLC objects.
+    :return: list of lower and upper bound PSLG structures.
+    :rtype: list.
+    """
+    upper_boundaries = deepcopy(lower_boundaries)
+    for i, ub in enumerate(upper_boundaries):
+        translate = np.array([[domain.L[j] if j==i else 0. for j in range(3)]])
+        ub.points += translate
     return lower_boundaries + upper_boundaries
 
 
-def build_point_list(sphere_pieces, boundaries, L):
+def build_point_list(domain, sphere_pieces, boundaries):
+    """Constructs full list of vertices for all geometry in the domain without
+    duplicates. Reindexes all topology after vertex removal. This step is expensive
+    but necessary as duplicate vertices cause segfaults in TetGen.
+    :param domain Domain: spatial domain for mesh.
+    :param sphere_pieces list: list of SpherePiece objects.
+    :param boundaries list: list of boundaryPLC objects.
+    :return: array of all vertices without duplicates.
+    :rtype: numpy.ndarray.
+    """
     logger.info('    -> building vertex list...')
 
     vcount = 0
@@ -209,9 +240,9 @@ def build_point_list(sphere_pieces, boundaries, L):
     on_x_lower = np.isclose(piece_points[:,0], 0.)
     on_y_lower = np.isclose(piece_points[:,1], 0.)
     on_z_lower = np.isclose(piece_points[:,2], 0.)
-    on_x_upper = np.isclose(piece_points[:,0], L[0])
-    on_y_upper = np.isclose(piece_points[:,1], L[1])
-    on_z_upper = np.isclose(piece_points[:,2], L[2])
+    on_x_upper = np.isclose(piece_points[:,0], domain.L[0])
+    on_y_upper = np.isclose(piece_points[:,1], domain.L[1])
+    on_z_upper = np.isclose(piece_points[:,2], domain.L[2])
 
     bpp_idx = np.where(
         on_x_lower | on_y_lower | on_z_lower |
@@ -221,10 +252,10 @@ def build_point_list(sphere_pieces, boundaries, L):
 
     vcount = len(bpp_idx)
     boundary_points = []
-    for points, tris, _ in boundaries:
-        boundary_points.append(points)
-        tris += vcount
-        vcount += len(points)
+    for b in boundaries:
+        boundary_points.append(b.points)
+        b.tris += vcount
+        vcount += len(b.points)
     boundary_points = np.vstack([piece_points[bpp_idx]] + boundary_points)
     mask = np.full(len(boundary_points), True)
 
@@ -254,16 +285,22 @@ def build_point_list(sphere_pieces, boundaries, L):
     reindex.update({k: reindex[v] for k, v in dup.items()})
     del dup
 
-    for _, tris, _ in boundaries:
-        tris[:] = np.array([
-            remap[reindex[v]] for v in tris.flatten()
-        ]).reshape(tris.shape)
+    for b in boundaries:
+        b.tris[:] = np.array([
+            remap[reindex[v]] for v in b.tris.flatten()
+        ]).reshape(b.tris.shape)
 
     return np.vstack((piece_points, boundary_points[vcount_bpp:]))
 
 
 def build_facet_list(sphere_pieces, boundaries):
-    all_facets = [tris for _, tris, _ in boundaries]
+    """Constructs list of facets for tetgen mesh build.
+    :param sphere_pieces list: list of SpherePiece objects.
+    :param boundaries list: list of boundaryPLC objects.
+    :return: tuple containing array of facet vertices and facet markers.
+    :rtype: tuple.
+    """
+    all_facets = [b.tris for b in boundaries]
     all_markers = [
         np.full(len(all_facets[0]), 1), np.full(len(all_facets[1]), 3),
         np.full(len(all_facets[2]), 5), np.full(len(all_facets[3]), 2),
@@ -277,6 +314,11 @@ def build_facet_list(sphere_pieces, boundaries):
 
 
 def build_hole_list(sphere_pieces):
+    """Constructs list of hole points for tetgen mesh build.
+    :param sphere_pieces list: list of SpherePiece objects.
+    :return: array of hole point coordinates.
+    :rtype: numpy.ndarray.
+    """
     all_holes = [p.sphere.x for p in sphere_pieces if p.is_hole]
     if len(all_holes):
         return np.vstack(all_holes)
@@ -284,11 +326,19 @@ def build_hole_list(sphere_pieces):
 
 
 def build_tetmesh(domain, sphere_pieces, boundaries, config):
+    """Handles calling TetGen to construct the tetrahedral mesh.
+    :param domain Domain: spatial domain for mesh.
+    :param sphere_pieces list: list of SpherePiece objects.
+    :param boundaries list: list of boundaryPLC objects.
+    :param config Config: configuration for mesh build.
+    :return mesh: tetrahedral mesh.
+    :rtype: MeshInfo.
+    """
     logger.info('Building tetrahedral mesh')
 
-    boundaries = duplicate_lower_boundaries(boundaries, domain.L)
+    boundaries = duplicate_lower_boundaries(domain, boundaries)
 
-    points = build_point_list(sphere_pieces, boundaries, domain.L)
+    points = build_point_list(domain, sphere_pieces, boundaries)
 
     # Fix boundary points to exactly zero
     for i in range(3):
