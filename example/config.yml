@@ -1,0 +1,8 @@
+allow_overlaps: false
+duplicate_particles: [false, false, false]
+output_format: [vtk]
+particle_file: particles.msp
+segment_length: 3.3e-05
+tetgen_max_volume: 5.0e-13
+tetgen_min_angle: 18.0
+tetgen_rad_edge_ratio: 1.4
