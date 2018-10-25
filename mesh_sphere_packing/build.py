@@ -8,6 +8,10 @@ from mesh_sphere_packing.tetmesh import build_tetmesh
 
 
 def output_mesh(mesh, config):
+    """Outputs mesh in formats specified in config.
+    :param mesh MeshInfo: tetrahedral mesh.
+    :param config Config: configuration for mesh build.
+    """
     if not config.output_format:
         return
     logger.info('Outputting mesh in formats: {}'
@@ -30,17 +34,25 @@ def output_mesh(mesh, config):
 
 
 def build(domain, particles, config):
+    """Handles building tetrahedral mesh topology and geometry based on input
+    particle set and configuration.
+    :param domain Domain: spatial domain for mesh.
+    :param particles numpy.ndarray: particle coordinates and radii.
+    :param config Config: configuration for mesh build.
+    :return mesh: tetrahedral mesh.
+    :rtype: MeshInfo.
+    """
     logger.info('Starting mesh build process')
-
     sphere_pieces = splitsphere(domain, particles, config)
     boundaries = boundarypslg(domain, sphere_pieces, config)
     mesh = build_tetmesh(domain, sphere_pieces, boundaries, config)
-    output_mesh(mesh, config)
-
-    logger.info('Completed')
+    logger.info('Completed mesh build')
+    return mesh
 
 
 if __name__ == '__main__':
     args = get_parser().parse_args()
-    data = load_data(args)
-    build(*data)
+    domain, particles, config = load_data(args)
+    mesh = build(domain, particles, config)
+    output_mesh(mesh, config)
+    logger.info('Finished')

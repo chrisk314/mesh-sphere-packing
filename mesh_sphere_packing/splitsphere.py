@@ -1,4 +1,3 @@
-
 import numpy as np
 from numpy import linalg as npl
 from numpy import random as npr
@@ -9,7 +8,7 @@ from mesh_sphere_packing import logger, TOL, ONE_THIRD
 
 
 def flatten(l):
-    """Return flattened list."""
+    """Return list `l` flattened."""
     flat = []
     for x in l:
         flat += flatten(x) if isinstance(x, list) else [x]
@@ -17,6 +16,13 @@ def flatten(l):
 
 
 def reindex_tris(points, tris):
+    """Reindexes triangle point indices.
+    :param points numpy.ndarray: array of point coordinates.
+    :param tris numpy.ndarray: point topology for a set of triangles.
+    :return: tuple containing numpy.ndarray of reduced set of point coordinates
+    and numpy.ndarray of topologies for reindexed triangles.
+    :rtype: tuple.
+    """
     count = 0
     reindex = {}
     points_reindexed = np.empty(points.shape)
@@ -33,37 +39,56 @@ def reindex_tris(points, tris):
     return points, tris
 
 
-def extend_domain(L, PBC, particles, ds):
+def extend_domain(domain, particles, ds):
+    """Extends domain by adding space at the lower and upper extents in
+    directions with no applied periodic boundary and applying necessary
+    shift to particle coordinates.
+    :param domain Domain: spatial domain for mesh.
+    :param particles numpy.ndarray: particle coordinates and radii.
+    :param ds float: characteristic segment length.
+    :return: tuple of Domain object and numpy.ndarray of adjusted particle
+    coordinates.
+    :rtype: tuple.
+    """
     for axis in range(3):
-        if not PBC[axis]:
+        if not domain.PBC[axis]:
             pad_extra = 0.5 * particles[:,4].max()
 
             pad_low = np.min(particles[:,axis+1] - particles[:,4])
             pad_low -= pad_extra
             pad_low = abs(pad_low) if pad_low < 0. else 0.
 
-            pad_high = np.max(particles[:,axis+1] + particles[:,4]) - L[axis]
+            pad_high = np.max(particles[:,axis+1] + particles[:,4]) - domain.L[axis]
             pad_high += pad_extra
             pad_high = pad_high if pad_high > 0. else 0.
 
-            L[axis] += pad_low + pad_high
+            domain.L[axis] += pad_low + pad_high
             particles[:,axis+1] += pad_low
-    return L, particles
+    return domain, particles
 
 
-def duplicate_particles(L, particles, config):
+def duplicate_particles(domain, particles, config):
+    """
+    Duplicates particles in close proximity to upper and lower boundaries along
+    specified axes.
+    :param domain Domain: spatial domain for mesh.
+    :param particles numpy.ndarray: particle coordinates and radii.
+    :param config Config: configuration for mesh build.
+    :return: array of particle coordinates including duplicates.
+    :rtype: numpy.ndarray.
+    """
     if not any(config.duplicate_particles):
         return particles
 
     axis = [i for i, v in enumerate(config.duplicate_particles) if v][0]
 
     idx_dup_lower = np.where(particles[:,axis+1] - particles[:,4] < 0.)
-    idx_dup_upper = np.where(particles[:,axis+1] + particles[:,4] > L[axis])
+    idx_dup_upper = np.where(particles[:,axis+1] + particles[:,4] > domain.L[axis])
 
     trans_dup_lower = np.zeros(3, dtype=np.float64)
-    trans_dup_lower[axis] = L[axis]
+    trans_dup_lower[axis] = domain.L[axis]
     trans_dup_upper = np.zeros(3, dtype=np.float64)
-    trans_dup_upper[axis] = -1. * L[axis]
+    trans_dup_upper[axis] = -1. * domain.L[axis]
 
     particles_dup_lower = particles[idx_dup_lower]
     particles_dup_lower[:,(1,2,3)] += trans_dup_lower
@@ -75,30 +100,49 @@ def duplicate_particles(L, particles, config):
 
 class Domain(object):
 
-    """Cuboid shaped spatial domain in R^3."""
+    """Cuboid shaped spatial domain in 3D. Stores domain lengths and periodic
+    boundary flags.
+    """
 
     def __init__(self, L, PBC):
+        """Constructs Domain object.
+        :param L numpy.ndarray: float array of domain edge lengths.
+        :param PBC numpy.ndarray: boolean array of periodic boundary flags.
+        """
         self.L = np.array(L, dtype=np.float64)
         self.PBC = np.array(PBC, dtype=bool)
-        self.volume = self.L.prod()
+
+    @property
+    def volume(self):
+        """Returns volume of domain."""
+        return self.L.prod()
 
 
 class IntersectionPoints(object):
 
+    """Stores vertices comprising intersection loop."""
+
     def __init__(self, i_loop, points):
+        """Constructs IntersectionPoints object.
+        :param i_loop IntersectionLoop: intersection loop object.
+        :param points numpy.ndarray: array of intersection loop vertices.
+        """
         self.i_loop = i_loop
         self.points = points
 
     @property
     def is_full_loop(self):
+        """Returns true if intersection loop is closed otherwise returns False."""
         return self.i_loop.is_full_loop
 
     @property
     def hole_point(self):
+        """Returns centre of mass coordinates of intersection loop."""
         return np.mean(self.points, axis=0)
 
     @property
     def origin(self):
+        """Returns coordinates of intersection loop origin."""
         if len(self.i_loop.ci_points) < 2:
             return self.i_loop.c
         if len(self.i_loop.ci_points) == 2:
@@ -114,6 +158,11 @@ class IntersectionLoop(object):
     """Represents the intersection curve between a sphere and a plane."""
 
     def __init__(self, sphere, domain, axis):
+        """Constructs IntersectionLoop object.
+        :param sphere Sphere: Sphere object.
+        :param domain Domain: spatial domain for mesh.
+        :param axis int: ordinal value of intersection axis 0:x, 1:y, 2:z.
+        """
         self.sphere = sphere
         self.domain = domain
         self.i0, self.i1, self.i2 = axis, (axis+1)%3, (axis+2)%3
@@ -123,12 +172,16 @@ class IntersectionLoop(object):
         self.add_phi_points()
 
     def set_analytical_curve(self):
+        """Sets centre coordinates and radius of circle at which a sphere intersects
+        the domain.
+        """
         i0 = self.i0
         self.c = self.sphere.x.copy()
         self.c[i0] = self.sphere.bound_high[i0] * self.domain.L[i0]
         self.r = np.sqrt(self.sphere.r**2 - (self.sphere.x[i0] - self.c[i0])**2)
 
     def set_axis_intersection_points(self):
+        """Sets curve intersection points."""
         self.ci_points = np.vstack((
             self.curve_intersection_points(self.i1, self.i2),
             self.curve_intersection_points(self.i2, self.i1)
@@ -136,6 +189,13 @@ class IntersectionLoop(object):
         self.is_full_loop = not bool(len(self.ci_points))
 
     def curve_intersection_points(self, i1, i2):
+        """Determine intersection points for analytical curve along axis `i1`.
+        :param i1 int: axis along which to check for intersections.
+        :param i2 int: axis perpendicular to self.i0 and i1.
+        :return: array of relative positions between intersection points and
+        analytical curve centre location.
+        :rtype: numpy.ndarray.
+        """
         # Check for splits of this curve along axis i1
         ci_points = np.full((2,3), self.c[self.i0])
         cnt = 0
@@ -167,6 +227,7 @@ class IntersectionLoop(object):
         return ci_points[:cnt] - self.c
 
     def add_phi_points(self):
+        """Add points to intersection curve at regular intervals in polar coordinates."""
         if len(self.ci_points):
             phi = np.angle(
                 self.ci_points[:,self.i1] + 1j * self.ci_points[:,self.i2]
@@ -178,13 +239,20 @@ class IntersectionLoop(object):
         # Add points to intersection curve
         self.added_points = []
         for phi1, phi2 in zip(phi[:-1], phi[1:]):
-            add_points = self._add_phi_points(phi1, phi2)
+            add_points = self._generate_phi_points(phi1, phi2)
             self.added_points.append((
                 self.iloop_zones(add_points),
                 IntersectionPoints(self, add_points)
             ))
 
-    def _add_phi_points(self, phi1, phi2):
+    def _generate_phi_points(self, phi1, phi2):
+        """Generate Cartesion coordinates of points along intersection curve evenly
+        spaced between specified points in polar coordinates.
+        :param phi1 float: initial angle.
+        :param phi2 float: terminating angle.
+        :return: array of generated point coordinates.
+        :rype: numpy.ndarray.
+        """
         phi_disp = phi2 - phi1
         n_add = int(np.ceil(phi_disp * self.r / self.sphere.ds))
         phi = phi1 + (phi_disp / n_add) * np.arange(n_add+1)
@@ -195,6 +263,12 @@ class IntersectionLoop(object):
         return points
 
     def iloop_zones(self, points):
+        """Returns tuple of indices indicating in which spatial "zone" the intersection
+        loop and it's periodic image are located.
+        :param points numpy.ndarray: array of points on the intersection loop.
+        :return: tuple of "zone" indices.
+        :rtype: tuple.
+        """
         com = points.mean(axis=0)
         z = ~((0. < com) & (com < self.domain.L))
         z[self.i0] = False
@@ -211,9 +285,15 @@ class IntersectionLoop(object):
 
 class Sphere(object):
 
-    """Sphere in R^3 with a unique id."""
+    """Sphere in 3D with a unique id."""
 
     def __init__(self, id, x, r, config):
+        """Constructs Sphere object.
+        :param id int: unique id of sphere.
+        :param x numpy.ndarray: sphere centre coordinates.
+        :param r float: sphere radius.
+        :param config Config: configuration for mesh build.
+        """
         self.config = config
         self.id = int(id)
         self.x = x
@@ -222,6 +302,9 @@ class Sphere(object):
         self.i_loops = []
 
     def initialise_points(self):
+        """Determines number of vertices required for sphere based on characteristic
+        segment length from config and initiates vertex placement.
+        """
         self.ds = self.config.segment_length
         num_points = int(4. * np.pi * self.r**2 / self.ds**2)
         self.gen_spiral_points(num_points=num_points)
@@ -229,6 +312,10 @@ class Sphere(object):
         self.max = self.points.max(axis=0)
 
     def gen_spiral_points(self, num_points=200):
+        """Generates vertex coordinates on the surface of the sphere using the spiral
+        point generator of Rakhmanov et al 1994.
+        :param num_points int (optional): number of vertices to place.
+        """
         indices = np.arange(0, num_points, dtype=float) + 0.5
 
         phi = np.arccos(1 - 2*indices/num_points)
@@ -240,7 +327,9 @@ class Sphere(object):
         self.points[:,2] = self.x[2] + self.r * np.cos(phi)
 
     def filter_points(self, strength=0.15):
-        """Filter out points lying too close to domain boundaries."""
+        """Filter out points lying too close to domain boundaries.
+        :param strength float (optional): controls cutoff distance for filtering.
+        """
         cutoff = strength * self.ds
 
         close_ax = [np.isclose(
@@ -251,6 +340,9 @@ class Sphere(object):
         self.points = self.points[~close_ax[0] & ~close_ax[1] & ~close_ax[2]]
 
     def set_split_planes(self):
+        """Sets boolean flags indicating if the sphere intersects the domain along a
+        given axis, and if so whether the intersection is with the upper doman boundary.
+        """
         self.split_axis = np.full(3, False)  # True if sphere is split along axis
         self.bound_high = np.full(3, False)  # True/false if crossing high/low bound
         for axis in range(3):
@@ -263,6 +355,12 @@ class Sphere(object):
     def split_axis_recursive(self, points, axis, trans):
         """Return nested list of point sets resulting from recursive splitting
         of sphere along the three coordinate axes.
+        :param points numpy.ndarray: subset of sphere surface vertices.
+        :param axis int: ordinal value of axis 0:x, 1:y, 2:z.
+        :param trans numpy.ndarray: translation vector.
+        :return: tuple, or list of tuples, containing partitioned points and
+        their corresponding translation vector.
+        :rtype: tuple | list.
         """
         if self.split_axis[axis]:
             trans_in, trans_out = trans.copy(), trans.copy()
@@ -283,7 +381,15 @@ class Sphere(object):
         return points, trans
 
     def split(self, domain):
-
+        """Handles splitting the sphere due to intersections with domain boundaries.
+        Sphere splitting involves partitioning vertices of the sphere's surface into
+        subsets to be translated to different regions of the domain and adding points
+        called "intersection loops" to unify the domain boundary surfaces with the sphere
+        surfaces.
+        :param domain Domain: spatial domain for mesh.
+        :return: list containing SpherePiece objects comprising the split Sphere.
+        :rtype: list.
+        """
         self.domain = domain
 
         if self.points is None:
@@ -361,16 +467,23 @@ class Sphere(object):
 
 class SpherePiece(object):
 
-    """Piece of a split sphere resulting from the intersection between
-    a sphere and 0 to 3 planes representing the boundaries of a cuboid
-    domain. The surface of the sphere is represented by a triangulated
-    point set in R^3.
+    """Piece of a split sphere resulting from the intersection between a sphere and 0
+    to 3 planes representing the boundaries of a cuboid domain. The surface of the
+    sphere is represented by a triangulated point set in 3D.
     """
 
-    def __init__(
-            self, sphere, points, trans_flag, i_points_list,
-            is_hole=False
-        ):
+    def __init__(self, sphere, points, trans_flag, i_points_list, is_hole=False):
+        """Constructs SpherePiece object.
+        :param sphere Sphere: Sphere object.
+        :param points numpy.ndarray: array of points on the sphere piece surface.
+        :param trans_flag numpy.ndarray: boolean array of translation flags for
+        each Cartesian direction. True if the points should be translated along
+        a given axis otherwise False.
+        :param i_points_list list: list of IntersectionLoop objects associated with
+        the sphere piece.
+        :param is_hole bool (optional): True if the SpherePiece constitutes a hole
+        in the mesh, i.e., it's a complete, not-split sphere, otherwise False.
+        """
         self.sphere = sphere
         self.domain = sphere.domain
         self.trans_flag = trans_flag
@@ -380,6 +493,9 @@ class SpherePiece(object):
         self.x = np.copy(sphere.x)
 
     def construct(self):
+        """Invokes triangulation of surface vertices and translation of geometry to
+        final location within the domain.
+        """
         self.triangulate_surface_points()
         if not self.is_hole:
             #self.apply_laplacian_smoothing()
@@ -388,7 +504,9 @@ class SpherePiece(object):
             self.handle_points_near_boundaries()
 
     def handle_points_near_boundaries(self, strength=0.10):
-        """Move points lying too close to domain boundaries to prevent bad tets."""
+        """Move points lying too close to domain boundaries to prevent bad tets.
+        :param strength float (optional): controls cutoff distance for point adjustment.
+        """
         cutoff = strength * self.sphere.ds
         self.sphere.bound_high = self.sphere.x > self.domain.L / 2.
         dr = 0.05 * self.sphere.ds
@@ -411,16 +529,26 @@ class SpherePiece(object):
             self.points[hemisphere_points,i] += adjustment
 
     def i_loop_points(self):
+        """Returns numpy.ndarray of intersection loop points."""
         return np.vstack([
             i_points.points for i_points in self.i_points_list
         ])
 
     def i_loop_origin_points(self):
+        """Returns numpy.ndarray of intersection loop origin points."""
         return np.vstack([
             i_points.origin for i_points in self.i_points_list
         ])
 
     def extract_surface_tris_from_chull(self, chull):
+        """Extracts triangles which lie on the surface of the sphere from the convex hull.
+        Triangles which do not belong to the sphere surface are distinguished on the basis
+        that their surface normal vector is perpendicular to the relative vector between
+        their centre of mass and one of the intersection loop centres of mass.
+        :param chull ConvexHull: convex hull of surface point set.
+        :return: array containing topology of only the surface triangles.
+        :rtype: numpy.ndarray.
+        """
 
         def tri_vec_prods(tris, points):
             tri_points = points[tris]
@@ -451,6 +579,7 @@ class SpherePiece(object):
         return chull.simplices[mask]
 
     def triangulate_surface_points(self):
+        """Handles triangulation of surface points using QuickHull."""
         if self.is_hole:
             chull = ConvexHull(self.points)
             self.points, self.tris = chull.points, chull.simplices
@@ -469,14 +598,24 @@ class SpherePiece(object):
         raise NotImplementedError
 
     def translate_points(self):
+        """Translates points to their final location in the domain."""
         self.x += self.trans_flag * self.domain.L
         self.points += self.x - self.sphere.x
 
 
 def handle_overlaps(sphere_pieces, config, strength=0.10):
-    """Move points to prevent particle overlaps."""
+    """Adjusts points as required to prevent overlaps between particle geometry.
+    :param sphere_pieces list: list of SpherePiece objects.
+    :param config Config: configuration for mesh build.
+    :param strength float (optional): controls cutoff distance for point adjustment.
+    """
 
     def adjust_points_along_normal(sp, norm, dr):
+        """Shifts nearby points along normal vector between virtual sphere centres.
+        :param sp SpherePiece: sphere piece to be adjusted
+        :param norm numpy.ndarray: normal vector along which to shift points.
+        :param dr float: distance to shift points.
+        """
         dpp = np.dot(sp.x, norm)  # Normal distance from origin to sphere center
 
         dist_point = np.dot(sp.points, norm)  # Normal distance from origin to points
@@ -530,6 +669,13 @@ def handle_overlaps(sphere_pieces, config, strength=0.10):
 
 
 def splitsphere(domain, particles, config):
+    """Creates geometry and topology of spheres and sphere surface sub-sections.
+    :param domain Domain: spatial domain for mesh.
+    :param particles numpy.ndarray: particle coordinates and radii.
+    :param config Config: configuration for mesh build.
+    :return: list containing SpherePiece objects.
+    :rtype: list.
+    """
     logger.info('Splitting input particles')
 
     # Create analytical representation of sphere
