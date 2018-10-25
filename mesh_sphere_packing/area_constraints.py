@@ -24,7 +24,7 @@ class AreaConstraints(object):
         self.L = domain.L
 
         self.spheres = np.array(
-            [[*sp.sphere.x, sp.sphere.r] for sp in sphere_pieces if sp.is_hole]
+            [[*sp.sphere.x, sp.sphere.r] for sp in sphere_pieces]
         )
 
         self.i_loops = []
@@ -144,7 +144,7 @@ class AreaConstraints(object):
         if not len(nbrs):
             growth = GROWTH_LIMIT
         else:
-            # TODO : This requires some tuning to get the desired refinement.
+            delta, elevation, rad = delta[nbrs], elevation[nbrs], rad[nbrs]
             g_min_part = 1. + (elevation / self.cutoff)**2. * (GROWTH_LIMIT - 1.)
             decay = (delta / rad)**2.5
             growth = np.min(g_min_part * (1. - decay) + GROWTH_LIMIT * decay)
@@ -161,10 +161,11 @@ class AreaConstraints(object):
         :rtype: float.
         """
         delta = npl.norm(p_xy - np.array([x, y]), axis=1) - rad
-        nbrs = np.where(delta < self.cutoff)[0]
+        nbrs = np.where((delta > 0.) & (delta < self.cutoff))[0]
         if not len(nbrs):
             growth = GROWTH_LIMIT
         else:
+            delta = delta[nbrs]
             decay = (delta / self.cutoff)**2.5
             growth = np.min((1. - decay) + GROWTH_LIMIT * decay)
         return growth * self.dA
