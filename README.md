@@ -34,7 +34,7 @@ interface to Triangle and TetGen.
 ### Usage
 To install simply clone and pip install like so
 ```
-git@github.com:chrisk314/mesh-sphere-packing.git
+git clone git@github.com:chrisk314/mesh-sphere-packing.git
 cd mesh-sphere-packing
 pip install .
 export PATH=${PATH}:${PWD}/bin
